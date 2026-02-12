@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { NavLink } from "@mantine/core";
 
 const navItems = [
-    {label: "ホーム", href: "/dashboard"},
+    {label: "ホーム", href: "/"},
     {label: "社員一覧", href: "/employees"},
     {label: "案件一覧", href: "#TODO"},
     {label: "履歴一覧", href: "#TODO"},
