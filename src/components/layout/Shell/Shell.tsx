@@ -2,7 +2,8 @@
 
 import { AppShell } from "@mantine/core";
 import { Header } from "../Header";
-
+import { Sidebar } from "../Sidebar";
+import { COLORS } from "@/config/theme";
 type ShellProps = {
     children: React.ReactNode;
 };
@@ -10,19 +11,18 @@ type ShellProps = {
 export default function Shell({ children }: ShellProps) {
     return (
         <AppShell
-            header={{ height: 60 }}
-            navbar={{width: 200, breakpoint: 'sm'}}
+            header={{ height: 80 }}
+            navbar={{width: 180, breakpoint: 'sm'}}
             padding="md"
         >
             {/* ── ヘッダー ── */}
-            <AppShell.Header>
+            <AppShell.Header bg={COLORS.main}>
                 <Header userName="山田太郎" employeeId="123456789" />
             </AppShell.Header>
 
             {/* ── サイドバー（次のステップで作成） ── */}
-            <AppShell.Navbar p="md">
-                {/* 仮のプレースホルダー */}
-                サイドバー
+            <AppShell.Navbar p="md" bg={COLORS.main}>
+                <Sidebar />
             </AppShell.Navbar>
 
             {/* ── メインコンテンツ ── */}
