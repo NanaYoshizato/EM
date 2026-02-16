@@ -13,7 +13,7 @@ export default function Shell({ children }: ShellProps) {
         <AppShell
             header={{ height: 80 }}
             navbar={{width: 180, breakpoint: 'sm'}}
-            padding="md"
+            padding="xl"
         >
             {/* ── ヘッダー ── */}
             <AppShell.Header bg={COLORS.main}>
