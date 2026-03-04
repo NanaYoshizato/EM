@@ -41,7 +41,10 @@ export default function LoginForm() {
    */
   const onSubmit = async (values: LoginFormValues) => {
     try {
+      // TODO: 実際のログインAPI処理をここに実装
+      // ログイン成功時にダッシュボードへ遷移
       alert("ログイン処理");
+
     } catch {
       alert("ログインに失敗しました");
     }
