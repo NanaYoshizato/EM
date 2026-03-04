@@ -41,15 +41,6 @@ export default function LoginForm() {
    */
   const onSubmit = async (values: LoginFormValues) => {
     try {
-      // TODO: 実際のログインAPI処理をここに実装
-      await fetch("http://localhost:3001/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(values),
-      });
-
-      // ログイン成功時にダッシュボードへ遷移
       alert("ログイン処理");
     } catch {
       alert("ログインに失敗しました");
