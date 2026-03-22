@@ -2,17 +2,18 @@ import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
 
 export const findUserByEmail = async (email: string) => {
-  if (email !== "test@example.com") return null;
-
-  //TODO　この行がいる理由確認する
-  const hashed = await bcrypt.hash("password123", 10);
-
-  //   return {
-  //     id: "111111",
-  //     email: "test@example.com",
-  //     password: hashed,
-  //   };
   return prisma.user.findUnique({
     where: { email },
   });
+};
+
+export const createUser = async (email: string, password: string) => {
+  const hashed = await bcrypt.hash(password, 10);
+  return prisma.user.create({
+    data: { email, password: hashed },
+  });
+};
+
+export const findUserById = async (id: string) => {
+  return prisma.user.findUnique({ where: { id } });
 };
