@@ -1,7 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useForm, zodResolver } from "@mantine/form";
 import {
   Card,
   TextInput,
@@ -11,50 +9,15 @@ import {
   Title,
   Center,
   Text,
+  Alert,
 } from "@mantine/core";
 import Link from "next/link";
 
 import { messages } from "../../../constants/messages";
-import { LoginFormValues, loginSchema } from "../schemas/loginSchema";
+import useLogin from "../hooks/useLogin";
 
 export default function LoginForm() {
-  const router = useRouter();
-
-  const form = useForm<LoginFormValues>({
-    initialValues: {
-      email: "",
-      password: "",
-    },
-    validate: (values) => {
-      const result = loginSchema.safeParse(values);
-
-      if (result.success) {
-        return {};
-      }
-
-      return result.error.flatten().fieldErrors;
-    },
-  });
-
-  /**
-   * ログインボタン押下時の処理
-   */
-  const onSubmit = async (values: LoginFormValues) => {
-    try {
-      // TODO: 実際のログインAPI処理をここに実装
-      await fetch("http://localhost:3001/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(values),
-      });
-
-      // ログイン成功時にダッシュボードへ遷移
-      alert("ログイン処理");
-    } catch {
-      alert("ログインに失敗しました");
-    }
-  };
+  const { form, onSubmit, error } = useLogin();
 
   return (
     <Center h="100vh" className="min-h-[calc(100vh-72px)] bg-gray-50 px-4">
@@ -66,17 +29,27 @@ export default function LoginForm() {
                 {messages.login.login}
               </Title>
 
+              {error && (
+                <Alert color="red" variant="light">
+                  {error}
+                </Alert>
+              )}
+
               <TextInput
                 label={messages.login.email}
                 placeholder={messages.login.emailPlaceholder}
                 {...form.getInputProps("email")}
               />
+              {/* TODO: あとで消す */}
+              <p>test@example.com</p>
 
               <PasswordInput
                 label={messages.login.password}
                 placeholder={messages.login.passwordPlaceholder}
                 {...form.getInputProps("password")}
               />
+              {/* TODO: あとで消す */}
+              <p>password123</p>
 
               <Button type="submit" fullWidth loading={form.submitting} mt="md">
                 {messages.login.login}
