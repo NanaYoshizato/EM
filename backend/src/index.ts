@@ -1,9 +1,10 @@
-import { Hono } from "hono";
+import { OpenAPIHono } from "@hono/zod-openapi";
+import { swaggerUI } from "@hono/swagger-ui";
 import { serve } from "@hono/node-server";
 import { cors } from "hono/cors";
 import authRoutes from "./features/auth/routes";
 
-const app = new Hono();
+const app = new OpenAPIHono();
 
 // CORS設定
 app.use(
@@ -19,6 +20,13 @@ app.get("/", (c) => {
 });
 
 app.route("/api", authRoutes);
+
+app.doc("/doc", {
+  openapi: "3.0.0",
+  info: { title: "Employee Management API", version: "1.0.0" },
+});
+
+app.get("/ui", swaggerUI({ url: "/doc" }));
 
 serve({
   fetch: app.fetch,

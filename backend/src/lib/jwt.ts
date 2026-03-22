@@ -5,3 +5,11 @@ export const generateToken = (userId: string) => {
     expiresIn: "1h",
   });
 };
+
+export const verifyToken = (token: string): { sub: string } | null => {
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET!) as { sub: string };
+  } catch {
+    return null;
+  }
+};
