@@ -1,0 +1,8 @@
+/* 確認モード時（fieldset disabled）でも入力値を読みやすくする */
+fieldset:disabled input,
+fieldset:disabled select,
+fieldset:disabled textarea {
+  color: var(--mantine-color-text);
+  -webkit-text-fill-color: var(--mantine-color-text);
+  opacity: 1;
+}

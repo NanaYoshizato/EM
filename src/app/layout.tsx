@@ -1,19 +1,13 @@
-"use client";
-
-import { MantineProvider } from "@mantine/core";
+import type { ReactNode } from "react";
+import { Providers } from "./providers";
 import "@mantine/core/styles.css";
+import "./globals.css";
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({children,}: {children: ReactNode;}) {
   return (
     <html lang="ja">
       <body>
-        <MantineProvider>
-            {children}
-        </MantineProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

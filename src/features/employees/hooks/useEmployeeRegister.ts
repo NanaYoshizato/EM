@@ -10,6 +10,7 @@ import { createEmployee } from "../api/createEmployee";
 export function useEmployeeRegister() {
   const router = useRouter();
   const [error, setError] = useState("");
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const form = useForm<EmployeeFormValues>({
     initialValues: {
@@ -60,15 +61,23 @@ export function useEmployeeRegister() {
     },
   });
 
-  const onSubmit = async (values: EmployeeFormValues) => {
-    setError("");
-    try {
-      await createEmployee(values);
-      router.push("/employees");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "登録に失敗しました");
-    }
-  };
+const onSubmit = async (values: EmployeeFormValues) => {
+  if (!isConfirming) {
+    setIsConfirming(true);
+    return;
+  }
+  setError("");
+  try {
+    await createEmployee(values);
+    router.push("/employees");
+  } catch (err) {
+    setError(err instanceof Error ? err.message : "登録に失敗しました");
+  }
+};
 
-  return { form, onSubmit, error };
+const cancelConfirm = () => {
+  setIsConfirming(false);
+};
+
+  return { form, onSubmit, error, isConfirming, cancelConfirm };
 }
