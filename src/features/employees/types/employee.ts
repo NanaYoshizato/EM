@@ -1,3 +1,5 @@
+export type { EmployeeFormValues } from "../schemas/employeeSchema";
+
 export type Employee = {
     id: string;
     employeeNumber: string;

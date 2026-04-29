@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Title, Stack, Text, Group, Button } from "@mantine/core";
+import { Title, Stack, Group, Button } from "@mantine/core";
 import { useEmployeeList } from "../hooks/useEmployeeList";
 import { EmployeeSearch } from "./EmployeeSearch";
 import { EmployeeTable } from "./EmployeeTable";
@@ -30,8 +30,6 @@ export default function EmployeeList() {
         <Title order={2}>社員一覧</Title>
 
         <EmployeeSearch loading={loading} onSearch={search} />
-
-        <Text size="sm">{employees.length}件</Text>
 
         <EmployeeTable
           employees={employees}

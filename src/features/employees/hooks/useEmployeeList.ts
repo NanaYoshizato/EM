@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Employee, EmployeeSearchParams, SortKey, SortOrder } from "../types/employee";
 import { fetchEmployees, deleteEmployee } from "../api/employees";
+import { downloadCsv } from "@/utils/csv";
 
 export function useEmployeeList() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -64,18 +65,16 @@ export function useEmployeeList() {
     setDeleteTarget(null);
   }, [deleteTarget]);
 
-  const downloadCsv = useCallback(() => {
-    const header = "社員番号,氏名,言語,単価,状態\n";
-    const rows = sortedEmployees
-      .map((e) => `${e.employeeNumber},${e.name},${e.frameWork},${e.projectValue},${e.condition}`)
-      .join("\n");
-    const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url;
-    a.download = "employees.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleDownloadCsv = useCallback(() => {
+    const headers = ["社員番号", "氏名", "言語", "単価", "状態"];
+    const rows = sortedEmployees.map((e) => [
+      e.employeeNumber,
+      e.name,
+      e.frameWork,
+      String(e.projectValue),
+      e.condition,
+    ]);
+    downloadCsv(headers, rows, "employees.csv");
   }, [sortedEmployees]);
 
   return {
@@ -89,6 +88,6 @@ export function useEmployeeList() {
     openDeleteModal,
     closeDeleteModal,
     handleDelete,
-    downloadCsv,
+    downloadCsv: handleDownloadCsv,
   };
 }

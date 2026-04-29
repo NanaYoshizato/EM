@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Table, Badge, Button, Group, Center, Loader } from "@mantine/core";
+import { Table, Badge, Button, Group, Center, Loader, Text } from "@mantine/core";
 import { IconChevronUp, IconChevronDown, IconSelector } from "@tabler/icons-react";
 import { Employee, SortKey, SortOrder } from "../types/employee";
 
@@ -48,6 +48,8 @@ export function EmployeeTable({ employees, loading, sortKey, sortOrder, onSort, 
   if (loading) return <Center py="xl"><Loader /></Center>;
 
   return (
+    <>
+    <Text size="sm">{employees.length}件</Text>
     <Table withTableBorder withColumnBorders highlightOnHover>
       <Table.Thead>
         <Table.Tr>
@@ -96,5 +98,6 @@ export function EmployeeTable({ employees, loading, sortKey, sortOrder, onSort, 
         ))}
       </Table.Tbody>
     </Table>
+    </>
   );
 }

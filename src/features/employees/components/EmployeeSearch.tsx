@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useForm } from "@mantine/form";
 import { Group, TextInput, Button, Stack } from "@mantine/core";
 import { EmployeeSearchParams } from "../types/employee";
 
@@ -10,10 +10,14 @@ type Props = {
 };
 
 export function EmployeeSearch({ loading, onSearch }: Props) {
-  const [employeeNameForm, setName]     = useState("");
-  const [employeeNumberForm, setNumber] = useState("");
+  const form = useForm<EmployeeSearchParams>({
+    initialValues: {
+      employeeNameForm: "",
+      employeeNumberForm: "",
+    },
+  });
 
-  const handleSearch = () => onSearch({ employeeNameForm, employeeNumberForm });
+  const handleSearch = () => onSearch(form.values);
 
   return (
     <Stack align="center" gap="md">
@@ -22,8 +26,7 @@ export function EmployeeSearch({ loading, onSearch }: Props) {
           <label style={{ whiteSpace: "nowrap", fontSize: 14 }}>社員名</label>
           <TextInput
             placeholder=""
-            value={employeeNameForm}
-            onChange={(e) => setName(e.currentTarget.value)}
+            {...form.getInputProps("employeeNameForm")}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             w={180}
           />
@@ -32,8 +35,7 @@ export function EmployeeSearch({ loading, onSearch }: Props) {
           <label style={{ whiteSpace: "nowrap", fontSize: 14 }}>社員番号</label>
           <TextInput
             placeholder=""
-            value={employeeNumberForm}
-            onChange={(e) => setNumber(e.currentTarget.value)}
+            {...form.getInputProps("employeeNumberForm")}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             w={180}
           />
