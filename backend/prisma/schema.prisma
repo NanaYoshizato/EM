@@ -18,4 +18,105 @@ model User {
   email     String  @unique
   password  String
   createdAt DateTime @default(now())
+
+  employee Employee?
+}
+
+model Employee {
+  employee_id String @id @default(uuid()) @map("employee_id")
+  userId String @unique @map("user_id")
+  user User? @relation(fields: [userId], references: [id])
+
+  name String @map("name")
+  furigana String @map("furigana")
+  email String @map("email")
+  birthDate DateTime @map("birth_date")
+  gender String @map("gender")
+  phone String? @map("phone")
+
+  joinDate DateTime? @map("join_date")
+  trainingEndDate DateTime? @map("training_end_date")
+  studiedFrameworks EmployeeStudiedFramework[]
+  availableFrameworks EmployeeAvailableFramework[]
+
+  previousCompany1Name String? @map("previous_company1_name")
+  previousCompany1StartDate DateTime? @map("previous_company1_start_date")
+  previousCompany1EndDate DateTime? @map("previous_company1_end_date")
+  previousCompany2Name String? @map("previous_company2_name")
+  previousCompany2StartDate DateTime? @map("previous_company2_start_date")
+  previousCompany2EndDate DateTime? @map("previous_company2_end_date")
+  previousCompany3Name String? @map("previous_company3_name")
+  previousCompany3StartDate DateTime? @map("previous_company3_start_date")
+  previousCompany3EndDate DateTime? @map("previous_company3_end_date")
+
+  weeklyWorkHours String? @map("weekly_work_hours")
+  monthlyEstimatedSalary String? @map("monthly_estimated_salary")
+
+  postalCode String? @map("postal_code")
+  prefecture String? @map("prefecture")
+  city String? @map("city")
+  streetAddress String? @map("street_address")
+
+  emergencyContactName String? @map("emergency_contact_name")
+  emergencyContactRelationship String? @map("emergency_contact_relationship")
+  emergencyContactPhone String? @map("emergency_contact_phone")
+
+  hasSpouse String? @map("has_spouse")
+  hasChildren String? @map("has_children")
+  hasDependents String? @map("has_dependents")
+
+  myNumber String? @unique @map("my_number")
+  employmentInsuranceNumber String? @map("employment_insurance_number")
+  basicPensionNumber String? @map("basic_pension_number")
+  salaryAccount String? @map("salary_account")
+
+  isDelete Boolean @default(false) @map("is_delete")
+
+  creater_id String? @map("creater_id")
+  createAt DateTime @default(now()) @map("create_at")
+  updater_id String? @map("updater_id")
+  updateAt DateTime @updatedAt @map("update_at")
+
+  @@index([userId])
+
+  @@map("Employee")
+}
+
+model Framework {
+  framework_id String @id @default(uuid())
+  framework_name String @unique
+
+  isDelete Boolean @default(false)
+
+  creater_id String?
+  createAt DateTime @default(now())
+  updater_id String?
+  updateAt DateTime @updatedAt
+
+  studiedBy EmployeeStudiedFramework[]
+  availableBy EmployeeAvailableFramework[]
+}
+
+model EmployeeStudiedFramework {
+  id String @id @default(uuid())
+
+  employeeId String
+  frameworkId String
+
+  employee Employee @relation(fields: [employeeId], references: [employee_id])
+  framework Framework @relation(fields: [frameworkId], references: [framework_id])
+
+  @@unique([employeeId, frameworkId])
+}
+
+model EmployeeAvailableFramework {
+  id String @id @default(uuid())
+
+  employeeId String
+  frameworkId String
+
+  employee Employee @relation(fields: [employeeId], references: [employee_id])
+  framework Framework @relation(fields: [frameworkId], references: [framework_id])
+
+  @@unique([employeeId, frameworkId])
 }

@@ -3,6 +3,7 @@ import { swaggerUI } from "@hono/swagger-ui";
 import { serve } from "@hono/node-server";
 import { cors } from "hono/cors";
 import authRoutes from "./features/auth/routes";
+import employeeRoutes from "./features/employees/routes";
 
 const app = new OpenAPIHono();
 
@@ -20,6 +21,7 @@ app.get("/", (c) => {
 });
 
 app.route("/api", authRoutes);
+app.route("/api", employeeRoutes);
 
 app.doc("/doc", {
   openapi: "3.0.0",
