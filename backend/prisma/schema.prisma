@@ -13,6 +13,12 @@ datasource db {
   provider = "sqlite"
 }
 
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
 model User {
   id        String  @id @default(uuid())
   email     String  @unique
@@ -31,7 +37,7 @@ model Employee {
   furigana String @map("furigana")
   email String @map("email")
   birthDate DateTime @map("birth_date")
-  gender String @map("gender")
+  gender Gender @map("gender")
   phone String? @map("phone")
 
   joinDate DateTime? @map("join_date")
@@ -50,7 +56,7 @@ model Employee {
   previousCompany3EndDate DateTime? @map("previous_company3_end_date")
 
   weeklyWorkHours String? @map("weekly_work_hours")
-  monthlyEstimatedSalary String? @map("monthly_estimated_salary")
+  monthlyEstimatedSalary Int? @map("monthly_estimated_salary")
 
   postalCode String? @map("postal_code")
   prefecture String? @map("prefecture")
