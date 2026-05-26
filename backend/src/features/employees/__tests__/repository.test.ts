@@ -65,7 +65,7 @@ beforeEach(() => {
 });
 
 const expectedResult = {
-  employee_id: "emp-1",
+  employeeId: "emp-1",
   name: "Updated Name",
   phone: "09012345678",
   userId: "user-1",
@@ -103,10 +103,10 @@ const expectedResult = {
   basicPensionNumber: null,
   salaryAccount: null,
   isDelete: false,
-  creater_id: null,
-  createAt: new Date("2026-01-01"),
-  updater_id: null,
-  updateAt: new Date("2026-01-01"),
+  createrId: null,
+  createdAt: new Date("2026-01-01"),
+  updaterId: null,
+  updatedAt: new Date("2026-01-01"),
 };
 
 describe("createEmployeeWithUser", () => {
@@ -151,7 +151,7 @@ describe("updateEmployee", () => {
     const result = await updateEmployee(employeeId, updateData);
 
     expect(mockEmployeeUpdate).toHaveBeenCalledWith({
-      where: { employee_id: employeeId },
+      where: { employeeId: employeeId },
       data: {
         name: "Updated Name",
         phone: "09012345678",
@@ -212,12 +212,12 @@ describe("getEmployeeList", () => {
   const expectedList = [
     {
       ...expectedResult,
-      employee_id: "emp-1",
+      employeeId: "emp-1",
       name: "John Doe",
     },
     {
       ...expectedResult,
-      employee_id: "emp-2",
+      employeeId: "emp-2",
       name: "Jane Smith",
     },
   ] as const;
@@ -229,7 +229,7 @@ describe("getEmployeeList", () => {
 
     expect(mockEmployeeFindMany).toHaveBeenCalledWith({
       select: {
-        employee_id: true,
+        employeeId: true,
         name: true,
       },
       where: {
@@ -247,12 +247,12 @@ describe("getEmployeeList", () => {
 
     expect(mockEmployeeFindMany).toHaveBeenCalledWith({
       select: {
-        employee_id: true,
+        employeeId: true,
         name: true,
       },
       where: {
         isDelete: false,
-        employee_id: "emp-1",
+        employeeId: "emp-1",
       },
     });
     expect(result).toEqual([expectedList[0]]);
@@ -266,7 +266,7 @@ describe("getEmployeeList", () => {
 
     expect(mockEmployeeFindMany).toHaveBeenCalledWith({
       select: {
-        employee_id: true,
+        employeeId: true,
         name: true,
       },
       where: {
@@ -288,12 +288,12 @@ describe("getEmployeeList", () => {
 
     expect(mockEmployeeFindMany).toHaveBeenCalledWith({
       select: {
-        employee_id: true,
+        employeeId: true,
         name: true,
       },
       where: {
         isDelete: false,
-        employee_id: "emp-1",
+        employeeId: "emp-1",
         name: {
           contains: "John",
           mode: "insensitive",
@@ -308,7 +308,7 @@ describe("getEmployeeDetails", () => {
   const employeeId = "emp-1";
   const expectedDetails = {
     ...expectedResult,
-    employee_id: employeeId,
+    employeeId: employeeId,
     name: "John Doe",
     studiedFrameworkIds: ["fw-1"], // ID配列に変更
     availableFrameworkIds: ["fw-2"], // ID配列に変更
@@ -321,7 +321,7 @@ describe("getEmployeeDetails", () => {
 
     expect(mockEmployeeFindUnique).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { employee_id: employeeId },
+        where: { employeeId: employeeId },
       }),
     );
     expect(result).toEqual(expectedDetails);

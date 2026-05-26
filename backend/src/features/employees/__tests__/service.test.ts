@@ -96,7 +96,7 @@ describe("updateEmployeeService", () => {
   };
 
   const expectedResult = {
-    employee_id: employeeId,
+    employeeId: employeeId,
     userId: "user-1",
     name: "Updated Name",
     furigana: "ヤマダタロウ",
@@ -134,10 +134,10 @@ describe("updateEmployeeService", () => {
     basicPensionNumber: null,
     salaryAccount: null,
     isDelete: false,
-    creater_id: null,
-    createAt: new Date("2026-01-01"),
-    updater_id: null,
-    updateAt: new Date("2026-01-01"),
+    createrId: null,
+    createdAt: new Date("2026-01-01"),
+    updaterId: null,
+    updatedAt: new Date("2026-01-01"),
   };
 
   it("正常に社員情報を更新する", async () => {
@@ -165,8 +165,8 @@ describe("updateEmployeeService", () => {
 
 describe("getEmployeeListService", () => {
   const expectedList = [
-    { employee_id: "emp-1", name: "John Doe" },
-    { employee_id: "emp-2", name: "Jane Smith" },
+    { employeeId: "emp-1", name: "John Doe" },
+    { employeeId: "emp-2", name: "Jane Smith" },
   ];
 
   it("社員一覧を取得する", async () => {
@@ -191,26 +191,26 @@ describe("getEmployeeListService", () => {
     const filters = { employeeId: "emp-1" };
 
     mockGetEmployeeList.mockResolvedValue([
-      { employee_id: "emp-1", name: "John Doe" },
+      { employeeId: "emp-1", name: "John Doe" },
     ]);
 
     const result = await getEmployeeListService(filters);
 
     expect(mockGetEmployeeList).toHaveBeenCalledWith(filters);
-    expect(result).toEqual([{ employee_id: "emp-1", name: "John Doe" }]);
+    expect(result).toEqual([{ employeeId: "emp-1", name: "John Doe" }]);
   });
 
   it("名前でフィルタリングして取得する", async () => {
     const filters = { name: "John" };
 
     mockGetEmployeeList.mockResolvedValue([
-      { employee_id: "emp-1", name: "John Doe" },
+      { employeeId: "emp-1", name: "John Doe" },
     ]);
 
     const result = await getEmployeeListService(filters);
 
     expect(mockGetEmployeeList).toHaveBeenCalledWith(filters);
-    expect(result).toEqual([{ employee_id: "emp-1", name: "John Doe" }]);
+    expect(result).toEqual([{ employeeId: "emp-1", name: "John Doe" }]);
   });
 
   it("空の社員一覧を返す", async () => {
@@ -226,7 +226,7 @@ describe("getEmployeeDetailsService", () => {
   const employeeId = "emp-1";
 
   const expectedDetails = {
-    employee_id: employeeId,
+    employeeId: employeeId,
     userId: "user-1",
     name: "John Doe",
     furigana: "ヤマダタロウ",
@@ -264,10 +264,10 @@ describe("getEmployeeDetailsService", () => {
     basicPensionNumber: null,
     salaryAccount: null,
     isDelete: false,
-    creater_id: null,
-    createAt: new Date("2026-01-01"),
-    updater_id: null,
-    updateAt: new Date("2026-01-01"),
+    createrId: null,
+    createdAt: new Date("2026-01-01"),
+    updaterId: null,
+    updatedAt: new Date("2026-01-01"),
   };
 
   it("社員の詳細情報を取得する", async () => {

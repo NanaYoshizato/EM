@@ -100,13 +100,13 @@ export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
 
 export const EmployeeListSchema = z.array(
   z.object({
-    employee_id: z.string(),
+    employeeId: z.string(),
     name: z.string(),
   }),
 );
 
 export const EmployeeDetailsSchema = z.object({
-  employee_id: z.string(),
+  employeeId: z.string(),
   userId: z.string(),
   name: z.string(),
   furigana: z.string(),
@@ -144,8 +144,8 @@ export const EmployeeDetailsSchema = z.object({
   basicPensionNumber: z.string().nullable(),
   salaryAccount: z.string().nullable(),
   isDelete: z.boolean(),
-  creater_id: z.string().nullable(),
-  createAt: z.string(),
-  updater_id: z.string().nullable(),
-  updateAt: z.string(),
+  createrId: z.string().nullable(),
+  createdAt: z.string(),
+  updaterId: z.string().nullable(),
+  updatedAt: z.string(),
 });
