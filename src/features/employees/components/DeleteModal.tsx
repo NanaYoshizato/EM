@@ -19,7 +19,7 @@ export function DeleteModal({ deleteTarget, onClose, onDelete }: Props) {
     >
       <Stack>
         <Text>
-          {deleteTarget?.name}（{deleteTarget?.employeeNumber}）を削除しますか？
+          {deleteTarget?.name}（{deleteTarget?.employeeCode}）を削除しますか？
         </Text>
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>いいえ</Button>

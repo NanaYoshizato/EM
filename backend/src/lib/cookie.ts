@@ -6,3 +6,10 @@ export const setAuthCookie = (c: Context, token: string) => {
     `access_token=${token}; HttpOnly; Path=/; Max-Age=3600`,
   );
 };
+
+export const clearAuthCookie = (c: Context) => {
+  c.header(
+    "Set-Cookie",
+    `access_token=; HttpOnly; Path=/; Max-Age=0`,
+  );
+};

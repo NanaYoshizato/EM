@@ -1,20 +1,54 @@
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import type {
   CreateEmployeeInput,
   UpdateEmployeeInput,
 } from "./types/employee.schema";
 
+export class DuplicateEmailError extends Error {
+  constructor() {
+    super("DuplicateEmail");
+    this.name = "DuplicateEmailError";
+  }
+}
+
+const DEFAULT_PASSWORD = "overtech";
+
+const buildEmployeeCode = (id: number) => `EMP${String(id).padStart(3, "0")}`;
+
 export const createEmployeeWithUser = async (data: CreateEmployeeInput) => {
   return prisma.$transaction(async (tx) => {
-    const hashed = await bcrypt.hash(data.password, 10);
-    const user = await tx.user.create({
-      data: { email: data.email, password: hashed },
+    const existingEmployeeWithEmail = await tx.employee.findFirst({
+      where: { email: data.email, isDelete: false },
     });
+    if (existingEmployeeWithEmail) {
+      throw new DuplicateEmailError();
+    }
+
+    let user = await tx.user.findUnique({ where: { email: data.email } });
+    if (!user) {
+      const hashed = await bcrypt.hash(DEFAULT_PASSWORD, 10);
+      user = await tx.user.create({
+        data: { email: data.email, password: hashed },
+      });
+    } else {
+      const linkedEmployee = await tx.employee.findUnique({
+        where: { userId: user.id },
+      });
+      if (linkedEmployee) {
+        throw new DuplicateEmailError();
+      }
+    }
+
+    const last = await tx.employee.findFirst({ orderBy: { id: "desc" } });
+    const nextId = (last?.id ?? 0) + 1;
+    const code = buildEmployeeCode(nextId);
 
     const employee = await tx.employee.create({
       data: {
         user: { connect: { id: user.id } },
+        employeeCode: code,
         name: data.name,
         furigana: data.furigana,
         email: data.email,
@@ -55,7 +89,7 @@ export const createEmployeeWithUser = async (data: CreateEmployeeInput) => {
           previousCompany3EndDate: new Date(data.previousCompany3EndDate),
         }),
         ...(data.weeklyWorkHours !== undefined && {
-          weeklyWorkHours: data.weeklyWorkHours.toString(),
+          weeklyWorkHours: data.weeklyWorkHours,
         }),
         ...(data.monthlyEstimatedSalary !== undefined && {
           monthlyEstimatedSalary: data.monthlyEstimatedSalary,
@@ -75,12 +109,14 @@ export const createEmployeeWithUser = async (data: CreateEmployeeInput) => {
         ...(data.emergencyContactPhone !== undefined && {
           emergencyContactPhone: data.emergencyContactPhone,
         }),
-        ...(data.hasSpouse !== undefined && { hasSpouse: data.hasSpouse }),
+        ...(data.hasSpouse !== undefined && {
+          hasSpouse: data.hasSpouse === "有",
+        }),
         ...(data.hasChildren !== undefined && {
-          hasChildren: data.hasChildren,
+          hasChildren: data.hasChildren === "有",
         }),
         ...(data.hasDependents !== undefined && {
-          hasDependents: data.hasDependents,
+          hasDependents: data.hasDependents === "有",
         }),
         ...(data.myNumber !== undefined && { myNumber: data.myNumber }),
         ...(data.employmentInsuranceNumber !== undefined && {
@@ -109,15 +145,15 @@ export const createEmployeeWithUser = async (data: CreateEmployeeInput) => {
       },
     });
 
-    return { userId: user.id, employeeId: employee.employee_id };
+    return { userId: user.id, employeeId: employee.id };
   });
 };
 
 export const updateEmployee = async (
-  employeeId: string,
+  employeeId: number,
   data: UpdateEmployeeInput,
 ) => {
-  const updateData: Record<string, unknown> = {};
+  const updateData: Prisma.EmployeeUpdateInput = {};
 
   if (data.name !== undefined) updateData.name = data.name;
   if (data.furigana !== undefined) updateData.furigana = data.furigana;
@@ -174,10 +210,12 @@ export const updateEmployee = async (
   if (data.emergencyContactPhone !== undefined)
     updateData.emergencyContactPhone = data.emergencyContactPhone;
 
-  if (data.hasSpouse !== undefined) updateData.hasSpouse = data.hasSpouse;
-  if (data.hasChildren !== undefined) updateData.hasChildren = data.hasChildren;
+  if (data.hasSpouse !== undefined)
+    updateData.hasSpouse = data.hasSpouse === "有";
+  if (data.hasChildren !== undefined)
+    updateData.hasChildren = data.hasChildren === "有";
   if (data.hasDependents !== undefined)
-    updateData.hasDependents = data.hasDependents;
+    updateData.hasDependents = data.hasDependents === "有";
 
   if (data.myNumber !== undefined) updateData.myNumber = data.myNumber;
   if (data.employmentInsuranceNumber !== undefined)
@@ -217,7 +255,7 @@ export const updateEmployee = async (
     }
 
     const updated = await tx.employee.update({
-      where: { employee_id: employeeId },
+      where: { id: employeeId },
       data: updateData,
     });
 
@@ -226,46 +264,70 @@ export const updateEmployee = async (
 };
 
 export const getEmployeeList = async (filters?: {
-  employeeId?: string;
+  employeeCode?: string;
   name?: string;
 }) => {
-  const where: Record<string, unknown> = {
-    isDelete: false,
-  };
+  const where: Prisma.EmployeeWhereInput = { isDelete: false };
 
-  if (filters?.employeeId) {
-    where.employee_id = filters.employeeId;
+  if (filters?.employeeCode) {
+    where.employeeCode = { contains: filters.employeeCode };
   }
 
   if (filters?.name) {
-    where.name = {
-      contains: filters.name,
-      mode: "insensitive" as const,
-    };
+    where.name = { contains: filters.name };
   }
 
-  return prisma.employee.findMany({
-    select: {
-      employee_id: true,
-      name: true,
-    },
+  const employees = await prisma.employee.findMany({
     where,
+    select: {
+      id: true,
+      employeeCode: true,
+      name: true,
+      assignments: {
+        where: { isDelete: false },
+        orderBy: { startDate: "desc" },
+        select: {
+          status: true,
+          contractPrice: true,
+          startDate: true,
+          frameworks: {
+            where: { isDelete: false },
+            select: { framework: { select: { frameworkName: true } } },
+          },
+        },
+      },
+    },
+    orderBy: { id: "asc" },
+  });
+
+  return employees.map((emp) => {
+    const latestAssignment = emp.assignments[0] ?? null;
+    const frameworks = latestAssignment
+      ? latestAssignment.frameworks.map((paf) => paf.framework.frameworkName)
+      : [];
+
+    return {
+      employeeId: emp.id,
+      employeeCode: emp.employeeCode,
+      name: emp.name,
+      frameworks,
+      contractPrice: latestAssignment?.contractPrice ?? null,
+      status: latestAssignment?.status ?? null,
+    };
   });
 };
 
-export const getEmployeeDetails = async (employeeId: string) => {
+export const getEmployeeDetails = async (employeeId: number) => {
   return prisma.employee.findUnique({
-    where: { employee_id: employeeId },
+    where: { id: employeeId },
     include: {
-      studiedFrameworks: {
-        include: {
-          framework: true,
-        },
-      },
-      availableFrameworks: {
-        include: {
-          framework: true,
-        },
+      studiedFrameworks: { include: { framework: true } },
+      availableFrameworks: { include: { framework: true } },
+      assignments: {
+        where: { isDelete: false },
+        orderBy: { startDate: "desc" },
+        take: 1,
+        select: { status: true },
       },
     },
   });

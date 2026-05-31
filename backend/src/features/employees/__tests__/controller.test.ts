@@ -1,25 +1,39 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Gender } from "@prisma/client";
 
+vi.mock("@/lib/prisma", () => ({
+  prisma: {},
+}));
+
 vi.mock("../service", () => ({
   createEmployee: vi.fn(),
   updateEmployeeService: vi.fn(),
+  getEmployeeListService: vi.fn(),
   getEmployeeDetailsService: vi.fn(),
 }));
 
 import {
   createEmployee,
   updateEmployeeService,
+  getEmployeeListService,
   getEmployeeDetailsService,
 } from "../service";
 import {
   createEmployeeController,
   updateEmployeeController,
+  getEmployeeListController,
   getEmployeeDetailsController,
+  mapEmployeeDetailsResponse,
 } from "../controller";
+
+type CreateCtx = Parameters<typeof createEmployeeController>[0];
+type UpdateCtx = Parameters<typeof updateEmployeeController>[0];
+type ListCtx = Parameters<typeof getEmployeeListController>[0];
+type DetailsCtx = Parameters<typeof getEmployeeDetailsController>[0];
 
 const mockCreateEmployee = vi.mocked(createEmployee);
 const mockUpdateEmployeeService = vi.mocked(updateEmployeeService);
+const mockGetEmployeeListService = vi.mocked(getEmployeeListService);
 const mockGetEmployeeDetailsService = vi.mocked(getEmployeeDetailsService);
 
 beforeEach(() => {
@@ -28,7 +42,7 @@ beforeEach(() => {
 
 describe("createEmployeeController", () => {
   it("should return 201 with no body", async () => {
-    const body = { email: "test@example.com", password: "password123" };
+    const body = { email: "test@example.com", name: "Test" };
     const expectedResponse = { status: 201 };
     const c = {
       req: {
@@ -36,7 +50,7 @@ describe("createEmployeeController", () => {
       },
       body: vi.fn().mockReturnValue(expectedResponse),
       json: vi.fn(),
-    } as unknown as any;
+    } as unknown as CreateCtx;
 
     const result = await createEmployeeController(c, vi.fn());
 
@@ -46,8 +60,8 @@ describe("createEmployeeController", () => {
     expect(result).toBe(expectedResponse);
   });
 
-  it("should return 409 when email is duplicate", async () => {
-    const body = { email: "test@example.com", password: "password123" };
+  it("should return 400 when email is duplicate", async () => {
+    const body = { email: "test@example.com", name: "Test" };
     mockCreateEmployee.mockRejectedValue(
       new Error("Unique constraint failed on the fields: (`email`"),
     );
@@ -56,16 +70,16 @@ describe("createEmployeeController", () => {
         valid: vi.fn().mockReturnValue(body),
       },
       body: vi.fn(),
-      json: vi.fn().mockReturnValue({ status: 409 }),
-    } as unknown as any;
+      json: vi.fn().mockReturnValue({ status: 400 }),
+    } as unknown as CreateCtx;
 
     const result = await createEmployeeController(c, vi.fn());
 
     expect(c.json).toHaveBeenCalledWith(
       { error: "メールアドレスが既に使用されています" },
-      409,
+      400,
     );
-    expect(result).toEqual({ status: 409 });
+    expect(result).toEqual({ status: 400 });
   });
 });
 
@@ -75,18 +89,18 @@ describe("updateEmployeeController", () => {
     const expectedResponse = { status: 200 };
     const c = {
       req: {
-        param: vi.fn().mockReturnValue({ id: "emp-1" }),
+        param: vi.fn().mockReturnValue({ id: 1 }),
         valid: vi.fn().mockReturnValue(updateBody),
       },
       body: vi.fn().mockReturnValue(expectedResponse),
       json: vi.fn(),
-    } as unknown as any;
+    } as unknown as UpdateCtx;
 
     const result = await updateEmployeeController(c, vi.fn());
 
     expect(c.req.param).toHaveBeenCalled();
     expect(c.req.valid).toHaveBeenCalledWith("json");
-    expect(mockUpdateEmployeeService).toHaveBeenCalledWith("emp-1", updateBody);
+    expect(mockUpdateEmployeeService).toHaveBeenCalledWith(1, updateBody);
     expect(c.body).toHaveBeenCalledWith(null, 200);
     expect(result).toBe(expectedResponse);
   });
@@ -96,12 +110,12 @@ describe("updateEmployeeController", () => {
     mockUpdateEmployeeService.mockRejectedValue(new Error("NotFound"));
     const c = {
       req: {
-        param: vi.fn().mockReturnValue({ id: "emp-1" }),
+        param: vi.fn().mockReturnValue({ id: 1 }),
         valid: vi.fn().mockReturnValue(updateBody),
       },
       body: vi.fn(),
       json: vi.fn().mockReturnValue({ status: 404 }),
-    } as unknown as any;
+    } as unknown as UpdateCtx;
 
     const result = await updateEmployeeController(c, vi.fn());
 
@@ -110,11 +124,59 @@ describe("updateEmployeeController", () => {
   });
 });
 
+describe("getEmployeeListController", () => {
+  it("社員一覧を返す", async () => {
+    const list = [
+      {
+        employeeId: 1,
+        employeeCode: "EMP001",
+        name: "John",
+        frameworks: ["React"],
+        contractPrice: 680000,
+        status: "WORKING" as const,
+      },
+    ];
+    mockGetEmployeeListService.mockResolvedValue(list);
+    const c = {
+      req: {
+        valid: vi.fn().mockReturnValue({}),
+      },
+      json: vi.fn().mockReturnValue({ status: 200 }),
+    } as unknown as ListCtx;
+
+    const result = await getEmployeeListController(c, vi.fn());
+
+    expect(mockGetEmployeeListService).toHaveBeenCalledWith({});
+    expect(c.json).toHaveBeenCalledWith(list, 200);
+    expect(result).toEqual({ status: 200 });
+  });
+
+  it("検索条件を渡す", async () => {
+    mockGetEmployeeListService.mockResolvedValue([]);
+    const c = {
+      req: {
+        valid: vi
+          .fn()
+          .mockReturnValue({ employeeCode: "EMP001", name: "John" }),
+      },
+      json: vi.fn().mockReturnValue({ status: 200 }),
+    } as unknown as ListCtx;
+
+    await getEmployeeListController(c, vi.fn());
+
+    expect(mockGetEmployeeListService).toHaveBeenCalledWith({
+      employeeCode: "EMP001",
+      name: "John",
+    });
+  });
+});
+
 describe("getEmployeeDetailsController", () => {
   it("should return employee details with 200", async () => {
     const serviceResult = {
-      employee_id: "emp-1",
-      userId: "user-1",
+      id: 1,
+      employeeCode: "EMP001",
+      userId: 1,
       name: "山田太郎",
       furigana: "ヤマダタロウ",
       email: "test@example.com",
@@ -125,36 +187,47 @@ describe("getEmployeeDetailsController", () => {
       trainingEndDate: null,
       studiedFrameworks: [
         {
-          id: "esf-1",
-          employeeId: "emp-1",
-          frameworkId: "fw-1",
+          id: 1,
+          employeeId: 1,
+          frameworkId: 1,
           framework: {
-            framework_id: "fw-1",
-            framework_name: "React",
+            id: 1,
+            frameworkName: "React",
             isDelete: false,
-            creater_id: null,
-            createAt: new Date("2026-01-01"),
-            updater_id: null,
-            updateAt: new Date("2026-01-01"),
+            createrId: null,
+            createdAt: new Date("2026-01-01"),
+            updaterId: null,
+            updatedAt: new Date("2026-01-01"),
           },
+          isDelete: false,
+          createrId: null,
+          createdAt: new Date("2026-01-01"),
+          updaterId: null,
+          updatedAt: new Date("2026-01-01"),
         },
       ],
       availableFrameworks: [
         {
-          id: "eaf-1",
-          employeeId: "emp-1",
-          frameworkId: "fw-2",
+          id: 2,
+          employeeId: 1,
+          frameworkId: 2,
           framework: {
-            framework_id: "fw-2",
-            framework_name: "Vue",
+            id: 2,
+            frameworkName: "Vue",
             isDelete: false,
-            creater_id: null,
-            createAt: new Date("2026-01-01"),
-            updater_id: null,
-            updateAt: new Date("2026-01-01"),
+            createrId: null,
+            createdAt: new Date("2026-01-01"),
+            updaterId: null,
+            updatedAt: new Date("2026-01-01"),
           },
+          isDelete: false,
+          createrId: null,
+          createdAt: new Date("2026-01-01"),
+          updaterId: null,
+          updatedAt: new Date("2026-01-01"),
         },
       ],
+      assignments: [{ status: "WORKING" as const }],
       previousCompany1Name: null,
       previousCompany1StartDate: null,
       previousCompany1EndDate: null,
@@ -170,6 +243,7 @@ describe("getEmployeeDetailsController", () => {
       prefecture: null,
       city: null,
       streetAddress: null,
+      nearestStation: null,
       emergencyContactName: null,
       emergencyContactRelationship: null,
       emergencyContactPhone: null,
@@ -181,68 +255,25 @@ describe("getEmployeeDetailsController", () => {
       basicPensionNumber: null,
       salaryAccount: null,
       isDelete: false,
-      creater_id: null,
-      createAt: new Date("2026-01-01T00:00:00.000Z"),
-      updater_id: null,
-      updateAt: new Date("2026-01-01T00:00:00.000Z"),
+      createrId: null,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updaterId: null,
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     };
-    const expectedDetails = {
-      employee_id: "emp-1",
-      userId: "user-1",
-      name: "山田太郎",
-      furigana: "ヤマダタロウ",
-      email: "test@example.com",
-      birthDate: "1990-01-01T00:00:00.000Z",
-      gender: "MALE",
-      phone: null,
-      joinDate: null,
-      trainingEndDate: null,
-      studiedFrameworkIds: ["fw-1"],
-      availableFrameworkIds: ["fw-2"],
-      previousCompany1Name: null,
-      previousCompany1StartDate: null,
-      previousCompany1EndDate: null,
-      previousCompany2Name: null,
-      previousCompany2StartDate: null,
-      previousCompany2EndDate: null,
-      previousCompany3Name: null,
-      previousCompany3StartDate: null,
-      previousCompany3EndDate: null,
-      weeklyWorkHours: null,
-      monthlyEstimatedSalary: null,
-      postalCode: null,
-      prefecture: null,
-      city: null,
-      streetAddress: null,
-      emergencyContactName: null,
-      emergencyContactRelationship: null,
-      emergencyContactPhone: null,
-      hasSpouse: null,
-      hasChildren: null,
-      hasDependents: null,
-      myNumber: null,
-      employmentInsuranceNumber: null,
-      basicPensionNumber: null,
-      salaryAccount: null,
-      isDelete: false,
-      creater_id: null,
-      createAt: "2026-01-01T00:00:00.000Z",
-      updater_id: null,
-      updateAt: "2026-01-01T00:00:00.000Z",
-    };
+    const expectedDetails = mapEmployeeDetailsResponse(serviceResult);
 
-    mockGetEmployeeDetailsService.mockResolvedValue(serviceResult);
+    mockGetEmployeeDetailsService.mockResolvedValue(serviceResult as never);
     const c = {
       req: {
-        param: vi.fn().mockReturnValue({ id: "emp-1" }),
+        param: vi.fn().mockReturnValue({ id: 1 }),
       },
       json: vi.fn().mockReturnValue({ status: 200 }),
-    } as unknown as any;
+    } as unknown as DetailsCtx;
 
     const result = await getEmployeeDetailsController(c, vi.fn());
 
     expect(c.req.param).toHaveBeenCalled();
-    expect(mockGetEmployeeDetailsService).toHaveBeenCalledWith("emp-1");
+    expect(mockGetEmployeeDetailsService).toHaveBeenCalledWith(1);
     expect(c.json).toHaveBeenCalledWith(expectedDetails, 200);
     expect(result).toEqual({ status: 200 });
   });
@@ -251,10 +282,10 @@ describe("getEmployeeDetailsController", () => {
     mockGetEmployeeDetailsService.mockResolvedValue(null);
     const c = {
       req: {
-        param: vi.fn().mockReturnValue({ id: "emp-1" }),
+        param: vi.fn().mockReturnValue({ id: 1 }),
       },
       json: vi.fn().mockReturnValue({ status: 404 }),
-    } as unknown as any;
+    } as unknown as DetailsCtx;
 
     const result = await getEmployeeDetailsController(c, vi.fn());
 

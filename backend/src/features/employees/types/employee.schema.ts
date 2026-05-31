@@ -1,9 +1,8 @@
 import { z } from "zod";
-import { Gender } from "@prisma/client";
+import { Gender, EmployeeStatus } from "@prisma/client";
 
 export const createEmployeeSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8),
 
   name: z.string(),
   furigana: z.string(),
@@ -24,7 +23,7 @@ export const createEmployeeSchema = z.object({
   previousCompany3StartDate: z.string().optional(),
   previousCompany3EndDate: z.string().optional(),
 
-  weeklyWorkHours: z.coerce.number().min(0).optional(),
+  weeklyWorkHours: z.string().optional(),
   monthlyEstimatedSalary: z.coerce.number().min(0).optional(),
 
   postalCode: z.string().optional(),
@@ -45,8 +44,8 @@ export const createEmployeeSchema = z.object({
   basicPensionNumber: z.string().optional(),
   salaryAccount: z.string().optional(),
 
-  studiedFrameworkIds: z.array(z.string()).optional(),
-  availableFrameworkIds: z.array(z.string()).optional(),
+  studiedFrameworkIds: z.array(z.number()).optional(),
+  availableFrameworkIds: z.array(z.number()).optional(),
 });
 
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
@@ -71,7 +70,7 @@ export const updateEmployeeSchema = z.object({
   previousCompany3StartDate: z.string().optional(),
   previousCompany3EndDate: z.string().optional(),
 
-  weeklyWorkHours: z.coerce.number().min(0).optional(),
+  weeklyWorkHours: z.string().optional(),
   monthlyEstimatedSalary: z.coerce.number().min(0).optional(),
 
   postalCode: z.string().optional(),
@@ -92,32 +91,48 @@ export const updateEmployeeSchema = z.object({
   basicPensionNumber: z.string().optional(),
   salaryAccount: z.string().optional(),
 
-  studiedFrameworkIds: z.array(z.string()).optional(),
-  availableFrameworkIds: z.array(z.string()).optional(),
+  studiedFrameworkIds: z.array(z.number()).optional(),
+  availableFrameworkIds: z.array(z.number()).optional(),
 });
 
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
 
-export const EmployeeListSchema = z.array(
-  z.object({
-    employeeId: z.string(),
-    name: z.string(),
-  }),
-);
+// 一覧画面用ビュー: Employee(社員ID/社員番号/氏名) + ProjectAssignment(言語/単価/状態)
+export const EmployeeListItemSchema = z.object({
+  employeeId: z.number(),
+  employeeCode: z.string(),
+  name: z.string(),
+  frameworks: z.array(z.string()),
+  contractPrice: z.number().nullable(),
+  status: z.nativeEnum(EmployeeStatus).nullable(),
+});
+
+export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;
+
+export const EmployeeListSchema = z.array(EmployeeListItemSchema);
+
+export const EmployeeListQuerySchema = z.object({
+  employeeCode: z.string().optional(),
+  name: z.string().optional(),
+});
 
 export const EmployeeDetailsSchema = z.object({
-  employeeId: z.string(),
-  userId: z.string(),
+  employeeId: z.number(),
+  employeeCode: z.string(),
+  userId: z.number(),
   name: z.string(),
-  furigana: z.string(),
-  email: z.string().email(),
-  birthDate: z.string(),
-  gender: z.enum(["MALE", "FEMALE", "OTHER"]),
+  furigana: z.string().nullable(),
+  email: z.string().nullable(),
+  birthDate: z.string().nullable(),
+  gender: z.nativeEnum(Gender).nullable(),
   phone: z.string().nullable(),
   joinDate: z.string().nullable(),
   trainingEndDate: z.string().nullable(),
-  studiedFrameworkIds: z.array(z.string()),
-  availableFrameworkIds: z.array(z.string()),
+  studiedFrameworkIds: z.array(z.number()),
+  availableFrameworkIds: z.array(z.number()),
+  studiedFrameworkNames: z.array(z.string()),
+  availableFrameworkNames: z.array(z.string()),
+  status: z.nativeEnum(EmployeeStatus).nullable(),
   previousCompany1Name: z.string().nullable(),
   previousCompany1StartDate: z.string().nullable(),
   previousCompany1EndDate: z.string().nullable(),
@@ -127,7 +142,7 @@ export const EmployeeDetailsSchema = z.object({
   previousCompany3Name: z.string().nullable(),
   previousCompany3StartDate: z.string().nullable(),
   previousCompany3EndDate: z.string().nullable(),
-  weeklyWorkHours: z.number().nullable(),
+  weeklyWorkHours: z.string().nullable(),
   monthlyEstimatedSalary: z.number().nullable(),
   postalCode: z.string().nullable(),
   prefecture: z.string().nullable(),
@@ -136,9 +151,9 @@ export const EmployeeDetailsSchema = z.object({
   emergencyContactName: z.string().nullable(),
   emergencyContactRelationship: z.string().nullable(),
   emergencyContactPhone: z.string().nullable(),
-  hasSpouse: z.string().nullable(),
-  hasChildren: z.string().nullable(),
-  hasDependents: z.string().nullable(),
+  hasSpouse: z.boolean().nullable(),
+  hasChildren: z.boolean().nullable(),
+  hasDependents: z.boolean().nullable(),
   myNumber: z.string().nullable(),
   employmentInsuranceNumber: z.string().nullable(),
   basicPensionNumber: z.string().nullable(),

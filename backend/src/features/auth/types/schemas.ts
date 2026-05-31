@@ -8,6 +8,13 @@ export const AuthBodySchema = z.object({
 });
 
 export const MeResponseSchema = z.object({
-  id: z.string(),
+  id: z.number(),
   email: z.email(),
+  employee: z
+    .object({
+      id: z.number(),
+      employeeCode: z.string(),
+      name: z.string(),
+    })
+    .nullable(),
 });

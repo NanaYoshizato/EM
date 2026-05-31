@@ -43,6 +43,18 @@ export const registerRoute = createRoute({
   },
 });
 
+export const logoutRoute = createRoute({
+  method: "post",
+  path: "/logout",
+  tags: ["Auth"],
+  responses: {
+    200: {
+      content: { "application/json": { schema: MessageSchema } },
+      description: "ログアウト成功",
+    },
+  },
+});
+
 export const meRoute = createRoute({
   method: "get",
   path: "/me",

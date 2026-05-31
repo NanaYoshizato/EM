@@ -123,6 +123,7 @@ model Framework {
   studiedBy         EmployeeStudiedFramework[]
   availableBy       EmployeeAvailableFramework[]
   projectFrameworks ProjectFramework[]
+  assignmentFrameworks ProjectAssignmentFramework[]
 
   @@map("framework")
 }
@@ -245,6 +246,8 @@ model ProjectAssignment {
   mentorId            Int?             @map("mentor_id")
   mentor              User?            @relation(fields: [mentorId], references: [id])
 
+  frameworks          ProjectAssignmentFramework[]
+
   isDelete            Boolean          @default(false) @map("is_delete")
   createrId           String?          @map("creater_id")
   createdAt           DateTime         @default(now()) @map("created_at")
@@ -254,4 +257,23 @@ model ProjectAssignment {
   @@unique([projectId, employeeId])
   @@index([status])
   @@map("project_assignment")
+}
+
+// 案件アサイン × 言語 (社員がその案件で使う言語)
+model ProjectAssignmentFramework {
+  id                  Int                @id @default(autoincrement())
+  projectAssignmentId Int                @map("project_assignment_id")
+  frameworkId         Int                @map("framework_id")
+
+  projectAssignment   ProjectAssignment  @relation(fields: [projectAssignmentId], references: [id])
+  framework           Framework          @relation(fields: [frameworkId], references: [id])
+
+  isDelete            Boolean            @default(false) @map("is_delete")
+  createrId           String?            @map("creater_id")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updaterId           String?            @map("updater_id")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  @@unique([projectAssignmentId, frameworkId])
+  @@map("project_assignment_framework")
 }

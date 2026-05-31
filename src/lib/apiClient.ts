@@ -2,7 +2,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 export const apiClient = {
   get: async (path: string) => {
-    const res = await fetch(`${BASE_URL}${path}` , {
+    const res = await fetch(`${BASE_URL}${path}`, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -21,11 +21,14 @@ export const apiClient = {
       credentials: "include",
       body: JSON.stringify(body),
     });
+    const text = await res.text();
     if (!res.ok) {
-      const error = await res.json();
+      const error = text
+        ? JSON.parse(text)
+        : { message: "エラーが発生しました" };
       throw new Error(error.message || "エラーが発生しました");
     }
-    return res.json();
+    return text ? JSON.parse(text) : undefined;
   },
 
   delete: async (path: string) => {

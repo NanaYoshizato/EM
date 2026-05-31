@@ -1,13 +1,13 @@
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
 type UserProps = {
-  id: string;
+  id: number;
   email: string;
   password: string;
 };
 
 export class User {
-  id: string;
+  id: number;
   email: string;
   private password: string;
 

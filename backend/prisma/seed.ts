@@ -280,25 +280,37 @@ async function main() {
   // ----------------------
   // ProjectAssignment
   // ----------------------
-  await prisma.projectAssignment.createMany({
+  const assignment1 = await prisma.projectAssignment.create({
+    data: {
+      projectId: projectFull1.id,
+      employeeId: employeeFull1.id,
+      status: EmployeeStatus.WORKING,
+      startDate: new Date("2025-04-01"),
+      contractPrice: 680000,
+      excessUnitPrice: 3000,
+      deductionUnitPrice: 2000,
+      mentorId: user2.id,
+    },
+  });
+
+  const assignment2 = await prisma.projectAssignment.create({
+    data: {
+      projectId: projectFull2.id,
+      employeeId: employeeFull2.id,
+      status: EmployeeStatus.WAITING,
+      startDate: new Date("2026-01-01"),
+      contractPrice: 700000,
+    },
+  });
+
+  // ----------------------
+  // ProjectAssignment × Framework
+  // ----------------------
+  await prisma.projectAssignmentFramework.createMany({
     data: [
-      {
-        projectId: projectFull1.id,
-        employeeId: employeeFull1.id,
-        status: EmployeeStatus.WORKING,
-        startDate: new Date("2025-04-01"),
-        contractPrice: 680000,
-        excessUnitPrice: 3000,
-        deductionUnitPrice: 2000,
-        mentorId: user2.id,
-      },
-      {
-        projectId: projectFull2.id,
-        employeeId: employeeFull2.id,
-        status: EmployeeStatus.WAITING,
-        startDate: new Date("2026-01-01"),
-        contractPrice: 700000,
-      },
+      { projectAssignmentId: assignment1.id, frameworkId: react.id },
+      { projectAssignmentId: assignment1.id, frameworkId: node.id },
+      { projectAssignmentId: assignment2.id, frameworkId: node.id },
     ],
   });
 

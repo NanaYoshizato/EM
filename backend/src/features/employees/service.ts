@@ -14,19 +14,19 @@ export const createEmployee = async (data: CreateEmployeeInput) => {
 };
 
 export const updateEmployeeService = async (
-  employeeId: string,
+  employeeId: number,
   data: UpdateEmployeeInput,
 ) => {
   return updateEmployee(employeeId, data);
 };
 
 export const getEmployeeListService = async (filters?: {
-  employeeId?: string;
+  employeeCode?: string;
   name?: string;
 }) => {
   return getEmployeeList(filters);
 };
 
-export const getEmployeeDetailsService = async (employeeId: string) => {
+export const getEmployeeDetailsService = async (employeeId: number) => {
   return getEmployeeDetails(employeeId);
 };

@@ -1,8 +1,9 @@
 import type { RouteHandler } from "@hono/zod-openapi";
 import { getCookie } from "hono/cookie";
 import { loginService, registerService, meService } from "./service";
-import type { loginRoute, registerRoute, meRoute } from "./types/routes";
-import { setAuthCookie } from "@/lib/cookie";
+import type { loginRoute, registerRoute, logoutRoute, meRoute } from "./types/routes";
+import { setAuthCookie, clearAuthCookie } from "@/lib/cookie";
+import { prisma } from "@/lib/prisma";
 
 export const loginController: RouteHandler<typeof loginRoute> = async (c) => {
   const { email, password } = c.req.valid("json");
@@ -34,6 +35,11 @@ export const registerController: RouteHandler<typeof registerRoute> = async (
   return c.json({ message: "Register success" }, 201);
 };
 
+export const logoutController: RouteHandler<typeof logoutRoute> = async (c) => {
+  clearAuthCookie(c);
+  return c.json({ message: "Logout success" }, 200);
+};
+
 export const meController: RouteHandler<typeof meRoute> = async (c) => {
   const token = getCookie(c, "access_token");
 
@@ -47,5 +53,23 @@ export const meController: RouteHandler<typeof meRoute> = async (c) => {
     return c.json({ message: "Unauthorized" }, 401);
   }
 
-  return c.json({ id: user.id, email: user.email }, 200);
+  const employee = await prisma.employee.findUnique({
+    where: { userId: user.id },
+    select: { id: true, employeeCode: true, name: true },
+  });
+
+  return c.json(
+    {
+      id: user.id,
+      email: user.email,
+      employee: employee
+        ? {
+            id: employee.id,
+            employeeCode: employee.employeeCode,
+            name: employee.name,
+          }
+        : null,
+    },
+    200,
+  );
 };

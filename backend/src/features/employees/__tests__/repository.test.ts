@@ -7,6 +7,7 @@ vi.mock("@/lib/prisma", () => ({
       update: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
     },
     employeeStudiedFramework: {
       deleteMany: vi.fn(),
@@ -19,7 +20,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-vi.mock("bcrypt", () => ({
+vi.mock("bcryptjs", () => ({
   default: {
     hash: vi.fn().mockResolvedValue("hashed_password"),
   },
@@ -32,7 +33,7 @@ import {
   getEmployeeDetails,
 } from "../repository";
 import { prisma } from "@/lib/prisma";
-import { Gender } from "@prisma/client";
+import { Gender, EmployeeStatus } from "@prisma/client";
 
 const mockTransaction = vi.mocked(prisma.$transaction);
 const mockEmployeeUpdate = vi.mocked(prisma.employee.update);
@@ -53,7 +54,6 @@ const mockAvailableCreateMany = vi.mocked(
 
 const baseInput = {
   email: "test@example.com",
-  password: "password123",
   birthDate: "1990-01-01",
   name: "山田太郎",
   furigana: "ヤマダタロウ",
@@ -64,54 +64,21 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-const expectedResult = {
-  employeeId: "emp-1",
-  name: "Updated Name",
-  phone: "09012345678",
-  userId: "user-1",
-  furigana: "ヤマダタロウ",
-  email: "test@example.com",
-  birthDate: new Date("1995-01-01"),
-  gender: Gender.MALE,
-  joinDate: null,
-  trainingEndDate: null,
-  studiedFrameworkIds: ["fw-1", "fw-2"],
-  availableFrameworkIds: ["fw-3"] as string[],
-  previousCompany1Name: null,
-  previousCompany1StartDate: null,
-  previousCompany1EndDate: null,
-  previousCompany2Name: null,
-  previousCompany2StartDate: null,
-  previousCompany2EndDate: null,
-  previousCompany3Name: null,
-  previousCompany3StartDate: null,
-  previousCompany3EndDate: null,
-  weeklyWorkHours: null,
-  monthlyEstimatedSalary: null,
-  postalCode: null,
-  prefecture: null,
-  city: null,
-  streetAddress: null,
-  emergencyContactName: null,
-  emergencyContactRelationship: null,
-  emergencyContactPhone: null,
-  hasSpouse: null,
-  hasChildren: null,
-  hasDependents: null,
-  myNumber: null,
-  employmentInsuranceNumber: null,
-  basicPensionNumber: null,
-  salaryAccount: null,
-  isDelete: false,
-  createrId: null,
-  createdAt: new Date("2026-01-01"),
-  updaterId: null,
-  updatedAt: new Date("2026-01-01"),
+type TxMock = {
+  employee: { update: typeof mockEmployeeUpdate };
+  employeeStudiedFramework: {
+    deleteMany: typeof mockStudiedDeleteMany;
+    createMany: typeof mockStudiedCreateMany;
+  };
+  employeeAvailableFramework: {
+    deleteMany: typeof mockAvailableDeleteMany;
+    createMany: typeof mockAvailableCreateMany;
+  };
 };
 
 describe("createEmployeeWithUser", () => {
   it("トランザクション内でUser+Employeeを作成する", async () => {
-    const expected = { userId: "user-1", employeeId: "emp-1" };
+    const expected = { userId: 1, employeeId: 1 };
     mockTransaction.mockResolvedValue(expected);
 
     const result = await createEmployeeWithUser(baseInput);
@@ -128,12 +95,12 @@ describe("createEmployeeWithUser", () => {
 });
 
 describe("updateEmployee", () => {
-  const employeeId = "emp-1";
+  const employeeId = 1;
   const updateData = { name: "Updated Name", phone: "09012345678" };
 
   it("社員情報を更新する", async () => {
-    mockTransaction.mockImplementation(async (callback) => {
-      const result = await callback({
+    (mockTransaction as unknown as { mockImplementation: (fn: (cb: (tx: TxMock) => Promise<unknown>) => Promise<unknown>) => void }).mockImplementation(async (callback) => {
+      return callback({
         employee: { update: mockEmployeeUpdate },
         employeeStudiedFramework: {
           deleteMany: mockStudiedDeleteMany,
@@ -143,37 +110,29 @@ describe("updateEmployee", () => {
           deleteMany: mockAvailableDeleteMany,
           createMany: mockAvailableCreateMany,
         },
-      } as any);
-      return result;
+      });
     });
-    mockEmployeeUpdate.mockResolvedValue(expectedResult);
+    mockEmployeeUpdate.mockResolvedValue({ id: 1 } as never);
 
-    const result = await updateEmployee(employeeId, updateData);
+    await updateEmployee(employeeId, updateData);
 
     expect(mockEmployeeUpdate).toHaveBeenCalledWith({
-      where: { employeeId: employeeId },
+      where: { id: employeeId },
       data: {
         name: "Updated Name",
         phone: "09012345678",
       },
     });
-    expect(result).toEqual(expectedResult);
   });
 
   it("フレームワーク情報を更新する", async () => {
     const frameworkUpdateData = {
-      studiedFrameworkIds: ["fw-1", "fw-2"],
-      availableFrameworkIds: ["fw-3"],
+      studiedFrameworkIds: [1, 2],
+      availableFrameworkIds: [3],
     };
 
-    const resultWithFrameworks = {
-      ...expectedResult,
-      studiedFrameworkIds: ["fw-1", "fw-2"],
-      availableFrameworkIds: ["fw-3"],
-    };
-
-    mockTransaction.mockImplementation(async (callback) => {
-      const result = await callback({
+    (mockTransaction as unknown as { mockImplementation: (fn: (cb: (tx: TxMock) => Promise<unknown>) => Promise<unknown>) => void }).mockImplementation(async (callback) => {
+      return callback({
         employee: { update: mockEmployeeUpdate },
         employeeStudiedFramework: {
           deleteMany: mockStudiedDeleteMany,
@@ -183,10 +142,9 @@ describe("updateEmployee", () => {
           deleteMany: mockAvailableDeleteMany,
           createMany: mockAvailableCreateMany,
         },
-      } as any);
-      return result;
+      });
     });
-    mockEmployeeUpdate.mockResolvedValue(resultWithFrameworks);
+    mockEmployeeUpdate.mockResolvedValue({ id: 1 } as never);
 
     await updateEmployee(employeeId, frameworkUpdateData);
 
@@ -195,133 +153,194 @@ describe("updateEmployee", () => {
     });
     expect(mockStudiedCreateMany).toHaveBeenCalledWith({
       data: [
-        { employeeId, frameworkId: "fw-1" },
-        { employeeId, frameworkId: "fw-2" },
+        { employeeId, frameworkId: 1 },
+        { employeeId, frameworkId: 2 },
       ],
     });
     expect(mockAvailableDeleteMany).toHaveBeenCalledWith({
       where: { employeeId },
     });
     expect(mockAvailableCreateMany).toHaveBeenCalledWith({
-      data: [{ employeeId, frameworkId: "fw-3" }],
+      data: [{ employeeId, frameworkId: 3 }],
     });
   });
 });
 
 describe("getEmployeeList", () => {
-  const expectedList = [
-    {
-      ...expectedResult,
-      employeeId: "emp-1",
-      name: "John Doe",
-    },
-    {
-      ...expectedResult,
-      employeeId: "emp-2",
-      name: "Jane Smith",
-    },
-  ] as const;
+  const buildEmployee = (
+    overrides: Partial<{
+      id: number;
+      employeeCode: string;
+      name: string;
+      assignments: Array<{
+        status: EmployeeStatus;
+        contractPrice: number | null;
+        startDate: Date | null;
+        frameworks: Array<{ framework: { frameworkName: string } }>;
+      }>;
+    }>,
+  ) => ({
+    id: 1,
+    employeeCode: "EMP001",
+    name: "John Doe",
+    assignments: [],
+    ...overrides,
+  });
 
-  it("社員一覧を取得する", async () => {
-    mockEmployeeFindMany.mockResolvedValue([...expectedList]);
+  it("社員一覧を取得する (アサインありの場合: 言語/単価/状態を返す)", async () => {
+    mockEmployeeFindMany.mockResolvedValue([
+      buildEmployee({
+        id: 1,
+        employeeCode: "EMP001",
+        name: "John Doe",
+        assignments: [
+          {
+            status: EmployeeStatus.WORKING,
+            contractPrice: 680000,
+            startDate: new Date("2026-01-01"),
+            frameworks: [{ framework: { frameworkName: "React" } }],
+          },
+        ],
+      }),
+      buildEmployee({
+        id: 2,
+        employeeCode: "EMP002",
+        name: "Jane Smith",
+        assignments: [],
+      }),
+    ] as never);
 
     const result = await getEmployeeList();
 
-    expect(mockEmployeeFindMany).toHaveBeenCalledWith({
-      select: {
-        employeeId: true,
-        name: true,
+    expect(mockEmployeeFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { isDelete: false },
+      }),
+    );
+    expect(result).toEqual([
+      {
+        employeeId: 1,
+        employeeCode: "EMP001",
+        name: "John Doe",
+        frameworks: ["React"],
+        contractPrice: 680000,
+        status: EmployeeStatus.WORKING,
       },
-      where: {
-        isDelete: false,
+      {
+        employeeId: 2,
+        employeeCode: "EMP002",
+        name: "Jane Smith",
+        frameworks: [],
+        contractPrice: null,
+        status: null,
       },
-    });
-    expect(result).toEqual(expectedList);
+    ]);
   });
 
-  it("社員IDでフィルタリングする", async () => {
-    const filters = { employeeId: "emp-1" };
-    mockEmployeeFindMany.mockResolvedValue([expectedList[0]]);
+  it("社員コードでフィルタリングする (部分一致)", async () => {
+    mockEmployeeFindMany.mockResolvedValue([] as never);
 
-    const result = await getEmployeeList(filters);
+    await getEmployeeList({ employeeCode: "EMP001" });
 
-    expect(mockEmployeeFindMany).toHaveBeenCalledWith({
-      select: {
-        employeeId: true,
-        name: true,
-      },
-      where: {
-        isDelete: false,
-        employeeId: "emp-1",
-      },
-    });
-    expect(result).toEqual([expectedList[0]]);
-  });
-
-  it("名前でフィルタリングする", async () => {
-    const filters = { name: "John" };
-    mockEmployeeFindMany.mockResolvedValue([expectedList[0]]);
-
-    const result = await getEmployeeList(filters);
-
-    expect(mockEmployeeFindMany).toHaveBeenCalledWith({
-      select: {
-        employeeId: true,
-        name: true,
-      },
-      where: {
-        isDelete: false,
-        name: {
-          contains: "John",
-          mode: "insensitive",
+    expect(mockEmployeeFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          isDelete: false,
+          employeeCode: { contains: "EMP001" },
         },
-      },
-    });
-    expect(result).toEqual([expectedList[0]]);
+      }),
+    );
+  });
+
+  it("名前でフィルタリングする (部分一致)", async () => {
+    mockEmployeeFindMany.mockResolvedValue([] as never);
+
+    await getEmployeeList({ name: "John" });
+
+    expect(mockEmployeeFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          isDelete: false,
+          name: { contains: "John" },
+        },
+      }),
+    );
   });
 
   it("複数のフィルタを適用する", async () => {
-    const filters = { employeeId: "emp-1", name: "John" };
-    mockEmployeeFindMany.mockResolvedValue([expectedList[0]]);
+    mockEmployeeFindMany.mockResolvedValue([] as never);
 
-    const result = await getEmployeeList(filters);
+    await getEmployeeList({ employeeCode: "EMP001", name: "John" });
 
-    expect(mockEmployeeFindMany).toHaveBeenCalledWith({
-      select: {
-        employeeId: true,
-        name: true,
-      },
-      where: {
-        isDelete: false,
-        employeeId: "emp-1",
-        name: {
-          contains: "John",
-          mode: "insensitive",
+    expect(mockEmployeeFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          isDelete: false,
+          employeeCode: { contains: "EMP001" },
+          name: { contains: "John" },
         },
-      },
-    });
-    expect(result).toEqual([expectedList[0]]);
+      }),
+    );
   });
 });
 
 describe("getEmployeeDetails", () => {
-  const employeeId = "emp-1";
+  const employeeId = 1;
   const expectedDetails = {
-    ...expectedResult,
-    employeeId: employeeId,
+    id: employeeId,
+    employeeCode: "EMP001",
+    userId: 1,
     name: "John Doe",
-    studiedFrameworkIds: ["fw-1"], // ID配列に変更
-    availableFrameworkIds: ["fw-2"], // ID配列に変更
+    furigana: "ヤマダタロウ",
+    email: "test@example.com",
+    birthDate: new Date("1990-01-01"),
+    gender: Gender.MALE,
+    phone: null,
+    joinDate: null,
+    trainingEndDate: null,
+    studiedFrameworks: [],
+    availableFrameworks: [],
+    previousCompany1Name: null,
+    previousCompany1StartDate: null,
+    previousCompany1EndDate: null,
+    previousCompany2Name: null,
+    previousCompany2StartDate: null,
+    previousCompany2EndDate: null,
+    previousCompany3Name: null,
+    previousCompany3StartDate: null,
+    previousCompany3EndDate: null,
+    weeklyWorkHours: null,
+    monthlyEstimatedSalary: null,
+    postalCode: null,
+    prefecture: null,
+    city: null,
+    streetAddress: null,
+    nearestStation: null,
+    emergencyContactName: null,
+    emergencyContactRelationship: null,
+    emergencyContactPhone: null,
+    hasSpouse: null,
+    hasChildren: null,
+    hasDependents: null,
+    myNumber: null,
+    employmentInsuranceNumber: null,
+    basicPensionNumber: null,
+    salaryAccount: null,
+    isDelete: false,
+    createrId: null,
+    createdAt: new Date("2026-01-01"),
+    updaterId: null,
+    updatedAt: new Date("2026-01-01"),
   };
 
   it("社員の詳細情報を取得する", async () => {
-    mockEmployeeFindUnique.mockResolvedValue(expectedDetails);
+    mockEmployeeFindUnique.mockResolvedValue(expectedDetails as never);
 
     const result = await getEmployeeDetails(employeeId);
 
     expect(mockEmployeeFindUnique).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { employeeId: employeeId },
+        where: { id: employeeId },
       }),
     );
     expect(result).toEqual(expectedDetails);
@@ -330,7 +349,7 @@ describe("getEmployeeDetails", () => {
   it("存在しない社員の場合nullを返す", async () => {
     mockEmployeeFindUnique.mockResolvedValue(null);
 
-    const result = await getEmployeeDetails("non-existent-id");
+    const result = await getEmployeeDetails(9999);
 
     expect(result).toBeNull();
   });

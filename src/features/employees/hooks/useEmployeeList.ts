@@ -1,15 +1,20 @@
 import { useState, useCallback, useEffect } from "react";
-import { Employee, EmployeeSearchParams, SortKey, SortOrder } from "../types/employee";
+import {
+  Employee,
+  EmployeeSearchParams,
+  SortKey,
+  SortOrder,
+  STATUS_LABEL,
+} from "../types/employee";
 import { fetchEmployees, deleteEmployee } from "../api/employees";
 import { downloadCsv } from "@/utils/csv";
 
 export function useEmployeeList() {
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading]     = useState(false);
-  const [sortKey, setSortKey]     = useState<SortKey | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 
-  // 削除モーダル用
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
 
   const search = useCallback(async (params: EmployeeSearchParams) => {
@@ -22,7 +27,6 @@ export function useEmployeeList() {
     }
   }, []);
 
-  // 初期表示時に全件取得
   useEffect(() => {
     search({ employeeNameForm: "", employeeNumberForm: "" });
   }, [search]);
@@ -40,39 +44,40 @@ export function useEmployeeList() {
 
   const sortedEmployees = sortKey
     ? [...employees].sort((a, b) => {
-        const aVal = a[sortKey];
-        const bVal = b[sortKey];
-        const cmp  = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        const aRaw = a[sortKey];
+        const bRaw = b[sortKey];
+        const aVal = Array.isArray(aRaw) ? aRaw.join(",") : (aRaw ?? "");
+        const bVal = Array.isArray(bRaw) ? bRaw.join(",") : (bRaw ?? "");
+        const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
         return sortOrder === "asc" ? cmp : -cmp;
       })
     : employees;
 
-  // モーダルを開く
   const openDeleteModal = useCallback((employee: Employee) => {
     setDeleteTarget(employee);
   }, []);
 
-  // モーダルを閉じる（いいえ）
   const closeDeleteModal = useCallback(() => {
     setDeleteTarget(null);
   }, []);
 
-  // 削除実行（モーダルの削除ボタン）
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
-    await deleteEmployee(deleteTarget.id);
-    setEmployees((prev) => prev.filter((e) => e.id !== deleteTarget.id));
+    await deleteEmployee(deleteTarget.employeeId);
+    setEmployees((prev) =>
+      prev.filter((e) => e.employeeId !== deleteTarget.employeeId),
+    );
     setDeleteTarget(null);
   }, [deleteTarget]);
 
   const handleDownloadCsv = useCallback(() => {
     const headers = ["社員番号", "氏名", "言語", "単価", "状態"];
     const rows = sortedEmployees.map((e) => [
-      e.employeeNumber,
+      e.employeeCode,
       e.name,
-      e.frameWork,
-      String(e.projectValue),
-      e.condition,
+      e.frameworks.join("/"),
+      e.contractPrice != null ? String(e.contractPrice) : "",
+      e.status ? STATUS_LABEL[e.status] : "",
     ]);
     downloadCsv(headers, rows, "employees.csv");
   }, [sortedEmployees]);

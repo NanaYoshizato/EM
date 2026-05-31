@@ -1,4 +1,4 @@
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
 export const findUserByEmail = async (email: string) => {
@@ -14,6 +14,6 @@ export const createUser = async (email: string, password: string) => {
   });
 };
 
-export const findUserById = async (id: string) => {
+export const findUserById = async (id: number) => {
   return prisma.user.findUnique({ where: { id } });
 };
