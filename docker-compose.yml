@@ -1,0 +1,53 @@
+services:
+  # 1. PostgreSQL データベース
+  db:
+    image: postgres:16-alpine
+    container_name: em-db
+    restart: always
+    environment:
+      POSTGRES_USER: johndoe
+      POSTGRES_PASSWORD: randompassword
+      POSTGRES_DB: mydb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U johndoe -d mydb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Hono バックエンド
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: em-backend
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://johndoe:randompassword@db:5432/mydb?schema=public
+      PORT: 3001
+      JWT_SECRET: nsgB6sK39vvnsuiy
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # 3. Next.js フロントエンド
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: em-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    depends_on:
+      - backend
+
+volumes:
+  pg-data:
