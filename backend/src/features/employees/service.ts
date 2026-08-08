@@ -3,6 +3,7 @@ import {
   updateEmployee,
   getEmployeeList,
   getEmployeeDetails,
+  findEmployeeSummaryByUserId,
 } from "./repository";
 import type {
   CreateEmployeeInput,
@@ -29,4 +30,14 @@ export const getEmployeeListService = async (filters?: {
 
 export const getEmployeeDetailsService = async (employeeId: number) => {
   return getEmployeeDetails(employeeId);
+};
+
+
+/**
+ * ユーザーidから社員情報を取得するサービス
+ * @param userId 
+ * @returns 社員テーブルのid, 社員番号, 氏名
+ */
+export const getEmployeeSummaryByUserId = (userId: number) => {
+  return findEmployeeSummaryByUserId(userId);
 };

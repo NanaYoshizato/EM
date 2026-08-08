@@ -1,5 +1,5 @@
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { authAdmin } from "@/lib/firebase";
 import type { Prisma } from "@prisma/client";
 import type {
   CreateEmployeeInput,
@@ -12,8 +12,6 @@ export class DuplicateEmailError extends Error {
     this.name = "DuplicateEmailError";
   }
 }
-
-const DEFAULT_PASSWORD = "overtech";
 
 const buildEmployeeCode = (id: number) => `EMP${String(id).padStart(3, "0")}`;
 
@@ -28,9 +26,20 @@ export const createEmployeeWithUser = async (data: CreateEmployeeInput) => {
 
     let user = await tx.user.findUnique({ where: { email: data.email } });
     if (!user) {
-      const hashed = await bcrypt.hash(DEFAULT_PASSWORD, 10);
+      let firebaseUid: string;
+      try {
+        const userRecord = await authAdmin.getUserByEmail(data.email);
+        firebaseUid = userRecord.uid;
+      } catch {
+        try {
+          const newUser = await authAdmin.createUser({ email: data.email });
+          firebaseUid = newUser.uid;
+        } catch {
+          firebaseUid = `emp_${crypto.randomUUID()}`;
+        }
+      }
       user = await tx.user.create({
-        data: { email: data.email, password: hashed },
+        data: { email: data.email, firebaseUid },
       });
     } else {
       const linkedEmployee = await tx.employee.findUnique({
@@ -332,3 +341,12 @@ export const getEmployeeDetails = async (employeeId: number) => {
     },
   });
 };
+
+/** 社員テーブルのid, 社員番号, 氏名を取得する */
+export const findEmployeeSummaryByUserId = async (userId: number) => {
+  return await prisma.employee.findUnique({
+    where: { userId },
+    select: { id: true, employeeCode: true, name: true },
+  })
+}
+

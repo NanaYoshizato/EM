@@ -7,7 +7,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:migrate": "docker compose exec backend pnpm prisma migrate dev",
+    "db:copy-migrations": "docker compose cp backend:/app/prisma/migrations backend/prisma/",
+    "emulator": "npx firebase-tools emulators:start --only auth --import=./emulator_data --export-on-exit=./emulator_data"
   },
   "keywords": [],
   "author": "",
@@ -18,6 +21,7 @@
     "@mantine/form": "^8.3.14",
     "@mantine/hooks": "^8.3.14",
     "@tabler/icons-react": "^3.36.1",
+    "firebase": "^12.17.1",
     "next": "^16.1.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -26,6 +30,7 @@
   "devDependencies": {
     "@types/node": "25.2.2",
     "@types/react": "19.2.13",
+    "firebase-tools": "^15.25.1",
     "typescript": "5.9.3",
     "vitest": "^4.1.5"
   }

@@ -1,5 +1,5 @@
 import { createRoute } from "@hono/zod-openapi";
-import { AuthBodySchema, MessageSchema, MeResponseSchema } from "./schemas";
+import { MessageSchema, MeResponseSchema, LoginAuthSchema } from "./schemas";
 
 export const loginRoute = createRoute({
   method: "post",
@@ -7,7 +7,7 @@ export const loginRoute = createRoute({
   tags: ["Auth"],
   request: {
     body: {
-      content: { "application/json": { schema: AuthBodySchema } },
+      content: { "application/json": { schema: LoginAuthSchema } },
     },
   },
   responses: {
@@ -28,7 +28,7 @@ export const registerRoute = createRoute({
   tags: ["Auth"],
   request: {
     body: {
-      content: { "application/json": { schema: AuthBodySchema } },
+      content: { "application/json": { schema: LoginAuthSchema } },
     },
   },
   responses: {

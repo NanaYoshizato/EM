@@ -31,15 +31,15 @@ enum SettlementUnit {
 }
 
 model User {
-  id        Int  @id @default(autoincrement())
-  email     String @unique
-  password  String
+  id          Int       @id @default(autoincrement())
+  email       String    @unique
+  firebaseUid String    @unique @map("firebase_uid")
 
-  isDelete  Boolean @default(false) @map("is_delete")
-  createrId String? @map("creater_id")
-  createdAt DateTime @default(now()) @map("created_at")
-  updaterId String? @map("updater_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  isDelete    Boolean   @default(false) @map("is_delete")
+  createrId   String?   @map("creater_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updaterId   String?   @map("updater_id")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   employee     Employee?
   assignments  ProjectAssignment[]

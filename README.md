@@ -41,12 +41,14 @@ cp .env.example .env
 ```
 
 ### 2. コンテナのビルドと起動
+- 2-1. Docker DeskTop起動
 
+- 2-2. Dockerをビルドする
 ```bash
 docker compose up --build
 ```
 * **起動するサービス**:
-  * フロントエンド (Next.js): [http://localhost:3000](http://localhost:3000)
+  * フロントエンド (Next.js): [http://localhost:3010](http://localhost:3010)
   * バックエンド (Hono): [http://localhost:3001](http://localhost:3001)
   * データベース (PostgreSQL): `localhost:5432`
 
@@ -60,9 +62,8 @@ docker compose exec backend pnpm prisma db seed
 
 ### 4. テーブル構造を変えたとき、DBに変更を反映する(毎回必要)
 ```bash
-docker compose exec backend pnpm prisma migrate dev --name "適当な名前"
+pnpm db:migrate --name "適当な名前"
 ```
-⇒再ビルド
 
 #### ※※SQLLiteで使用していた以下のコマンドはDocker側で自動的に実行されるので不要
 schema.prismaを生成するコマンド
@@ -77,6 +78,29 @@ DB作成するコマンド
 
 ### 5. 新しいSQLファイルをローカルPCにコピー
 ```bash
-docker compose cp backend:/app/prisma/migrations backend/prisma/
+pnpm db:copy-migrations
 ```
+
+---
+
+## Firebase Auth エミュレータの起動手順
+
+### 1. 前提条件（Java Runtime Environment）
+エミュレータの実行には **Java (JRE/JDK 11以上)** が必要です。
+
+```bash
+# Ubuntu / Debian の場合
+sudo apt update && sudo apt install -y default-jre
+
+# Javaがインストールされたか確認（11以上）
+java -version
+```
+
+### 2. エミュレータの起動
+```bash
+pnpm emulator
+```
+
+* **Auth エミュレータ**: `http://127.0.0.1:9099`
+* **Emulator UI**: `http://127.0.0.1:4000/auth`
 
