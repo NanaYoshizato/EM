@@ -1,7 +1,6 @@
 import { apiClient } from "@/lib/apiClient";
-import { LoginFormValues } from "../schemas/loginSchema";
-import { LoginResponse } from "../types/auth";
+import type { LoginResponse } from "../types/auth";
 
-export async function login(req: LoginFormValues): Promise<LoginResponse> {
-    return apiClient.post("/api/login", req);
-  }
+export async function login(idToken: string): Promise<LoginResponse> {
+  return apiClient.post("/api/login", { idToken });
+}

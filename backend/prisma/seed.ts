@@ -4,40 +4,37 @@ import {
   EmployeeStatus,
   SettlementUnit,
 } from "@prisma/client";
-import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 async function main() {
-  const hashed = await bcrypt.hash("password123", 10);
-
   // ----------------------
   // User
   // ----------------------
   const user1 = await prisma.user.create({
     data: {
       email: "admin@test.com",
-      password: hashed,
+      firebaseUid: "admin-firebase-uid",
     },
   });
 
   const user2 = await prisma.user.create({
     data: {
       email: "mentor@test.com",
-      password: hashed,
+      firebaseUid: "mentor-firebase-uid",
     },
   });
 
   const user3 = await prisma.user.create({
     data: {
       email: "employee1@test.com",
-      password: hashed,
+      firebaseUid: "employee1-firebase-uid",
     },
   });
 
   const user4 = await prisma.user.create({
     data: {
       email: "employee2@test.com",
-      password: hashed,
+      firebaseUid: "employee2-firebase-uid",
     },
   });
 

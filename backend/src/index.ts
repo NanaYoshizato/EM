@@ -7,11 +7,11 @@ import employeeRoutes from "./features/employees/routes";
 
 const app = new OpenAPIHono();
 
-// CORS設定
+// CORS設定 (pnpm devのフロント:3000, Dockerのフロント:3010)
 app.use(
   "*",
   cors({
-    origin: "http://localhost:3000",
+    origin: ["http://localhost:3000", "http://localhost:3010"],
     credentials: true,
   }),
 );

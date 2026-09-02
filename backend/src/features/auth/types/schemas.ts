@@ -2,10 +2,7 @@ import { z } from "@hono/zod-openapi";
 
 export const MessageSchema = z.object({ message: z.string() });
 
-export const AuthBodySchema = z.object({
-  email: z.email(),
-  password: z.string().min(1),
-});
+export const LoginAuthSchema = z.object({ idToken: z.string() });
 
 export const MeResponseSchema = z.object({
   id: z.number(),
