@@ -20,12 +20,6 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-vi.mock("bcryptjs", () => ({
-  default: {
-    hash: vi.fn().mockResolvedValue("hashed_password"),
-  },
-}));
-
 import {
   createEmployeeWithUser,
   updateEmployee,
