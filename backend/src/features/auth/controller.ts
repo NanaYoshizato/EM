@@ -1,8 +1,7 @@
 import type { RouteHandler } from "@hono/zod-openapi";
-import { getCookie } from "hono/cookie";
 import { loginService, registerService, meService, logoutService } from "./service";
 import type { loginRoute, registerRoute, logoutRoute, meRoute } from "./types/routes";
-import { setAuthCookie, deleteAuthCookie } from "@/lib/cookie";
+import { setAuthCookie, deleteAuthCookie, getAuthToken } from "@/lib/cookie";
 
 /** ログインコントローラー */
 export const loginController: RouteHandler<typeof loginRoute> = async (c) => {
@@ -17,7 +16,14 @@ export const loginController: RouteHandler<typeof loginRoute> = async (c) => {
 
     setAuthCookie(c, result.sessionCookie);
 
-    return c.json({ code: "Login success", message: "ログインに成功しました" }, 200);
+    return c.json(
+      {
+        code: "Login success",
+        message: "ログインに成功しました",
+        accessToken: result.sessionCookie,
+      },
+      200
+    );
   } catch (error: unknown) {
     console.error(error);
     return c.json({ code: "UNAUTHORIZED", message: "認証に失敗しました" }, 401);
@@ -43,7 +49,7 @@ export const registerController: RouteHandler<typeof registerRoute> = async (
 
 /** ログアウトコントローラー */
 export const logoutController: RouteHandler<typeof logoutRoute> = async (c) => {
-  const sessionCookie = getCookie(c, "access_token");
+  const sessionCookie = getAuthToken(c);
   await logoutService(sessionCookie);
   deleteAuthCookie(c);
   return c.json({ code: "Logout success", message: "ログアウトに成功しました" }, 200);
@@ -51,7 +57,7 @@ export const logoutController: RouteHandler<typeof logoutRoute> = async (c) => {
 
 /** ログイン情報コントローラー */
 export const meController: RouteHandler<typeof meRoute> = async (c) => {
-  const sessionCookie = getCookie(c, "access_token");
+  const sessionCookie = getAuthToken(c);
   const me = await meService(sessionCookie);
 
   if (!me) {
