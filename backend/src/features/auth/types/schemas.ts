@@ -4,6 +4,12 @@ export const MessageSchema = z.object({ message: z.string() });
 
 export const LoginAuthSchema = z.object({ idToken: z.string() });
 
+export const LoginResponseSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  accessToken: z.string(),
+});
+
 export const MeResponseSchema = z.object({
   id: z.number(),
   email: z.email(),
