@@ -16,6 +16,7 @@ export const findUserByEmail = async (email: string) => {
 export const findUserByFirebaseUid = async (firebaseUid: string) => {
   return prisma.user.findUnique({
     where: { firebaseUid },
+    include: { role: true },
   });
 };
 

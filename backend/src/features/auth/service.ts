@@ -54,6 +54,7 @@ export const meService = async (sessionCookie?: string) => {
     return {
       id: user.id,
       email: user.email,
+      role: user.roleName,
       employee,
     }
   } catch (err) {

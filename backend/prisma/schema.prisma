@@ -35,6 +35,9 @@ model User {
   email       String    @unique
   firebaseUid String    @unique @map("firebase_uid")
 
+  roleId      Int       @default(2) @map("role_id")
+  role        Role      @relation(fields: [roleId], references: [id])
+
   isDelete    Boolean   @default(false) @map("is_delete")
   createrId   String?   @map("creater_id")
   createdAt   DateTime  @default(now()) @map("created_at")
@@ -45,6 +48,23 @@ model User {
   assignments  ProjectAssignment[]
 
   @@map("user")
+}
+
+// 権限マスタ (1: 管理者 / 2: 一般社員 / 3: 営業担当)
+model Role {
+  id    Int    @id
+  name  String @unique @map("name")
+  label String @map("label")
+
+  users User[]
+
+  isDelete  Boolean  @default(false) @map("is_delete")
+  createrId String?  @map("creater_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updaterId String?  @map("updater_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("role")
 }
 
 model Employee {

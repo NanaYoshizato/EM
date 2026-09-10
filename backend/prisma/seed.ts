@@ -14,6 +14,7 @@ async function main() {
     data: {
       email: "admin@test.com",
       firebaseUid: "admin-firebase-uid",
+      roleId: 1, // admin
     },
   });
 
@@ -21,6 +22,7 @@ async function main() {
     data: {
       email: "mentor@test.com",
       firebaseUid: "mentor-firebase-uid",
+      roleId: 2, // employee
     },
   });
 
@@ -28,6 +30,7 @@ async function main() {
     data: {
       email: "employee1@test.com",
       firebaseUid: "employee1-firebase-uid",
+      roleId: 2, // employee
     },
   });
 
@@ -35,6 +38,7 @@ async function main() {
     data: {
       email: "employee2@test.com",
       firebaseUid: "employee2-firebase-uid",
+      roleId: 3, // sales
     },
   });
 
