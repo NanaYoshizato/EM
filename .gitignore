@@ -3,6 +3,8 @@
 /.next
 /next-env.d.ts
 /.agents
+.claude
+preflight.md
 docs
 firebase-debug.log*
 *.log
