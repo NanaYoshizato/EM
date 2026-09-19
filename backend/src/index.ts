@@ -1,15 +1,17 @@
-import { Hono } from "hono";
+import { OpenAPIHono } from "@hono/zod-openapi";
+import { swaggerUI } from "@hono/swagger-ui";
 import { serve } from "@hono/node-server";
 import { cors } from "hono/cors";
 import authRoutes from "./features/auth/routes";
+import employeeRoutes from "./features/employees/routes";
 
-const app = new Hono();
+const app = new OpenAPIHono();
 
-// CORS設定
+// CORS設定 (pnpm devのフロント:3000, Dockerのフロント:3010)
 app.use(
   "*",
   cors({
-    origin: "http://localhost:3000",
+    origin: ["http://localhost:3000", "http://localhost:3010"],
     credentials: true,
   }),
 );
@@ -19,6 +21,14 @@ app.get("/", (c) => {
 });
 
 app.route("/api", authRoutes);
+app.route("/api", employeeRoutes);
+
+app.doc("/doc", {
+  openapi: "3.0.0",
+  info: { title: "Employee Management API", version: "1.0.0" },
+});
+
+app.get("/ui", swaggerUI({ url: "/doc" }));
 
 serve({
   fetch: app.fetch,

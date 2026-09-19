@@ -1,19 +1,63 @@
-import type { Context } from "hono";
-import { loginService } from "./service";
+import type { RouteHandler } from "@hono/zod-openapi";
+import { getCookie } from "hono/cookie";
+import { loginService, registerService, meService, logoutService } from "./service";
+import type { loginRoute, registerRoute, logoutRoute, meRoute } from "./types/routes";
+import { setAuthCookie, deleteAuthCookie } from "@/lib/cookie";
 
-export const loginController = async (c: Context) => {
-  const body = await c.req.json();
+/** ログインコントローラー */
+export const loginController: RouteHandler<typeof loginRoute> = async (c) => {
+  const { idToken } = c.req.valid("json");
 
-  const result = await loginService(body.email, body.password);
+  try {
+    const result = await loginService(idToken);
+
+    if (!result || result.code !== "SUCCESS") {
+      return c.json({ code: "UNAUTHORIZED", message: "認証に失敗しました" }, 401);
+    }
+
+    setAuthCookie(c, result.sessionCookie);
+
+    return c.json({ code: "Login success", message: "ログインに成功しました" }, 200);
+  } catch (error: unknown) {
+    console.error(error);
+    return c.json({ code: "UNAUTHORIZED", message: "認証に失敗しました" }, 401);
+  }
+};
+
+/** 登録コントローラー */
+export const registerController: RouteHandler<typeof registerRoute> = async (
+  c,
+) => {
+  const { idToken } = c.req.valid("json");
+
+  const result = await registerService(idToken);
 
   if (!result) {
-    return c.json({ message: "Invalid credentials" }, 401);
+    return c.json({ message: "Email already in use" }, 409);
   }
 
-  c.header(
-    "Set-Cookie",
-    `access_token=${result.token}; HttpOnly; Path=/; Max-Age=3600`,
-  );
+  setAuthCookie(c, result.idToken);
 
-  return c.json({ message: "Login success" }, 200);
+  return c.json({ message: "Register success" }, 201);
+};
+
+/** ログアウトコントローラー */
+export const logoutController: RouteHandler<typeof logoutRoute> = async (c) => {
+  const sessionCookie = getCookie(c, "access_token");
+  await logoutService(sessionCookie);
+  deleteAuthCookie(c);
+  return c.json({ code: "Logout success", message: "ログアウトに成功しました" }, 200);
+};
+
+/** ログイン情報コントローラー */
+export const meController: RouteHandler<typeof meRoute> = async (c) => {
+  const sessionCookie = getCookie(c, "access_token");
+  const me = await meService(sessionCookie);
+
+  if (!me) {
+    deleteAuthCookie(c);
+    return c.json({ code: "UNAUTHORIZED", message: "認証に失敗しました" }, 401);
+  }
+
+  return c.json(me, 200);
 };

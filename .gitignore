@@ -2,3 +2,7 @@
 
 /.next
 /next-env.d.ts
+/.agents
+docs
+firebase-debug.log*
+*.log

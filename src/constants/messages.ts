@@ -39,6 +39,16 @@ export const messages = {
     },
   },
 
+  employee: {
+    employeeNumber: "社員番号",
+    name: "氏名",
+    frameWork: "言語・フレームワーク",
+    projectValue: "単価（円）",
+    condition: "状態",
+    register: "社員登録",
+    registerButton: "登録する",
+  },
+
   login: {
     email: "メールアドレス",
     emailPlaceholder: "メールアドレスを入力",

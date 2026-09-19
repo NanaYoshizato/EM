@@ -1,6 +1,6 @@
 # EM
-社員管理システム
 
+社員管理システム
 
 # EM　初期セットアップ
 
@@ -28,3 +28,99 @@ pnpm dev
 ```
 
 http://localhost:3000 が立ち上がります。
+
+---
+
+## Dockerでのセットアップ手順（PostgreSQL環境）
+
+### 1. 環境変数ファイル（.env）の作成
+
+```bash
+cd backend
+cp .env.example .env
+```
+
+### 2. コンテナのビルドと起動
+
+- 2-1. Docker DeskTop起動
+
+- 2-2. Dockerをビルドする
+
+```bash
+docker compose up --build
+```
+
+- **起動するサービス**:
+  - フロントエンド (Next.js): [http://localhost:3010](http://localhost:3010)
+  - バックエンド (Hono): [http://localhost:3001](http://localhost:3001)
+  - データベース (PostgreSQL): `localhost:5432`
+
+### 3. 初期データの登録（初回起動時のみ）
+
+コンテナが正常に起動したら、別のターミナルタブを開き、プロジェクトのルートディレクトリで以下のコマンドを実行してテストデータを登録。
+
+```bash
+docker compose exec backend pnpm prisma db seed
+```
+
+### 4. テーブル構造を変えたとき、DBに変更を反映する(毎回必要)
+
+```bash
+pnpm db:migrate --name "適当な名前"
+```
+
+#### ※※SQLLiteで使用していた以下のコマンドはDocker側で自動的に実行されるので不要
+
+schema.prismaを生成するコマンド
+
+`cd backend`
+
+`pnpm prisma generate`
+
+DB作成するコマンド
+
+`pnpm prisma db push`
+
+### 5. 新しいSQLファイルをローカルPCにコピー
+
+```bash
+pnpm db:copy-migrations
+```
+
+---
+
+## Firebase Auth エミュレータの起動手順
+
+### 1. 前提条件（Java Runtime Environment）
+
+エミュレータの実行には **Java (JRE/JDK 11以上)** が必要です。
+
+```bash
+# Ubuntu / Debian の場合
+sudo apt update && sudo apt install -y default-jre
+# Macの場合
+brew install openjdk
+
+# Javaがインストールされたか確認（11以上）
+java -version
+```
+
+### 2. エミュレータの起動
+
+```bash
+pnpm emulator
+```
+
+- **Auth エミュレータ**: `http://127.0.0.1:9099`
+- **Emulator UI**: `http://127.0.0.1:4000/auth`
+
+---
+
+## API仕様の確認・動作確認（Swagger UI）
+
+バックエンド起動中（`docker compose up` または `cd backend && pnpm dev`）であれば、ブラウザから以下にアクセスするとAPI仕様の確認・実行ができます。
+
+- **Swagger UI**: [http://localhost:3001/ui](http://localhost:3001/ui)
+- **OpenAPIスキーマ（JSON）**: [http://localhost:3001/doc](http://localhost:3001/doc)
+
+`/login`・`/me`など認証が絡むエンドポイントをSwagger UI上で試す場合は、事前にFirebase Auth エミュレータを起動し、対象ユーザーのIDトークンを取得したうえで、Swagger UIの `POST /login` を実行してセッションCookieを発行する必要があります（同一オリジンのSwagger UIから叩くため、以降のリクエストにはCookieが自動的に付与されます）。IDトークンはFirebase Client SDK経由でのサインイン、またはAdmin SDKの`createCustomToken` → `accounts:signInWithCustomToken`（エミュレータのREST API）で取得できます。
