@@ -15,14 +15,16 @@ CREATE TABLE "role" (
 -- CreateIndex
 CREATE UNIQUE INDEX "role_name_key" ON "role"("name");
 
--- Seed master data
+-- Seed master data (権限の強い順)
 INSERT INTO "role" ("id", "name", "label", "updated_at") VALUES
   (1, 'admin', '管理者', CURRENT_TIMESTAMP),
-  (2, 'employee', '一般社員', CURRENT_TIMESTAMP),
-  (3, 'sales', '営業担当', CURRENT_TIMESTAMP);
+  (2, 'system_admin', 'システム管理者', CURRENT_TIMESTAMP),
+  (3, 'sales', '営業担当', CURRENT_TIMESTAMP),
+  (4, 'mentor', 'メンター', CURRENT_TIMESTAMP),
+  (5, 'employee', '一般社員', CURRENT_TIMESTAMP);
 
 -- AlterTable
-ALTER TABLE "user" ADD COLUMN     "role_id" INTEGER NOT NULL DEFAULT 2;
+ALTER TABLE "user" ADD COLUMN     "role_id" INTEGER NOT NULL DEFAULT 5;
 
 -- AddForeignKey
 ALTER TABLE "user" ADD CONSTRAINT "user_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "role"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

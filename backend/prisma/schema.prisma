@@ -35,7 +35,7 @@ model User {
   email       String    @unique
   firebaseUid String    @unique @map("firebase_uid")
 
-  roleId      Int       @default(2) @map("role_id")
+  roleId      Int       @default(5) @map("role_id")
   role        Role      @relation(fields: [roleId], references: [id])
 
   isDelete    Boolean   @default(false) @map("is_delete")
@@ -50,7 +50,7 @@ model User {
   @@map("user")
 }
 
-// 権限マスタ (1: 管理者 / 2: 一般社員 / 3: 営業担当 / 4: システム管理者 / 5: メンター)
+// 権限マスタ (権限の強い順: 1: 管理者 / 2: システム管理者 / 3: 営業担当 / 4: メンター / 5: 一般社員)
 model Role {
   id    Int    @id
   name  String @unique @map("name")
