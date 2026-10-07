@@ -7,7 +7,7 @@ type UserProps = {
   firebaseUid: string;
   isDelete: boolean;
   roleId: number;
-  role: { name: RoleName };
+  role: { name: RoleName; label: string };
 };
 
 // ユーザーのアクティブレコード
@@ -18,6 +18,7 @@ export class User {
   private _isDelete: boolean;
   private _roleId: number;
   private _roleName: RoleName;
+  private _roleLabel: string;
 
   private constructor(props: UserProps) {
     this._id = props.id;
@@ -26,17 +27,24 @@ export class User {
     this._isDelete = props.isDelete;
     this._roleId = props.roleId;
     this._roleName = props.role.name;
+    this._roleLabel = props.role.label;
   };
 
   get id(): number { return this._id };
   get email(): string { return this._email };
   get roleId(): number { return this._roleId };
   get roleName(): RoleName { return this._roleName };
+  get roleLabel(): string { return this._roleLabel };
 
   // 業務ロジック
   static async findByFirebaseUid(uid: string): Promise<User | null> {
     const row = await findUserByFirebaseUid(uid);
-    return row ? new User({ ...row, role: { name: row.role.name as RoleName } }) : null;
+    return row
+      ? new User({
+          ...row,
+          role: { name: row.role.name as RoleName, label: row.role.label },
+        })
+      : null;
   };
 
   // 業務ロジック

@@ -12,6 +12,7 @@ export const MeResponseSchema = z.object({
   id: z.number(),
   email: z.email(),
   role: RoleNameSchema,
+  roleLabel: z.string(),
   employee: z
     .object({
       id: z.number(),
