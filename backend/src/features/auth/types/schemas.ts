@@ -4,7 +4,13 @@ export const MessageSchema = z.object({ message: z.string() });
 
 export const LoginAuthSchema = z.object({ idToken: z.string() });
 
-export const RoleNameSchema = z.enum(["admin", "employee", "sales"]);
+export const RoleNameSchema = z.enum([
+  "admin",
+  "employee",
+  "sales",
+  "system_admin",
+  "mentor",
+]);
 export type RoleName = z.infer<typeof RoleNameSchema>;
 
 export const MeResponseSchema = z.object({

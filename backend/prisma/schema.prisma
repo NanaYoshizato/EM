@@ -50,7 +50,7 @@ model User {
   @@map("user")
 }
 
-// 権限マスタ (1: 管理者 / 2: 一般社員 / 3: 営業担当)
+// 権限マスタ (1: 管理者 / 2: 一般社員 / 3: 営業担当 / 4: システム管理者 / 5: メンター)
 model Role {
   id    Int    @id
   name  String @unique @map("name")
