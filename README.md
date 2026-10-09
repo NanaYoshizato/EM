@@ -113,3 +113,14 @@ pnpm emulator
 
 - **Auth エミュレータ**: `http://127.0.0.1:9099`
 - **Emulator UI**: `http://127.0.0.1:4000/auth`
+
+---
+
+## API仕様の確認・動作確認（Swagger UI）
+
+バックエンド起動中（`docker compose up` または `cd backend && pnpm dev`）であれば、ブラウザから以下にアクセスするとAPI仕様の確認・実行ができます。
+
+- **Swagger UI**: [http://localhost:3001/ui](http://localhost:3001/ui)
+- **OpenAPIスキーマ（JSON）**: [http://localhost:3001/doc](http://localhost:3001/doc)
+
+`/login`・`/me`など認証が絡むエンドポイントをSwagger UI上で試す場合は、事前にFirebase Auth エミュレータを起動し、対象ユーザーのIDトークンを取得したうえで、Swagger UIの `POST /login` を実行してセッションCookieを発行する必要があります（同一オリジンのSwagger UIから叩くため、以降のリクエストにはCookieが自動的に付与されます）。IDトークンはFirebase Client SDK経由でのサインイン、またはAdmin SDKの`createCustomToken` → `accounts:signInWithCustomToken`（エミュレータのREST API）で取得できます。

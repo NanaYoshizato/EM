@@ -4,9 +4,21 @@ import {
   EmployeeStatus,
   SettlementUnit,
 } from "@prisma/client";
+import { ROLES, ROLE_ID } from "../src/constants/roles";
 
 const prisma = new PrismaClient();
 async function main() {
+  // ----------------------
+  // Role（マスタデータ。idはsrc/constants/roles.tsの並び順と一致させる）
+  // ----------------------
+  for (const role of ROLES) {
+    await prisma.role.upsert({
+      where: { id: role.id },
+      update: {},
+      create: role,
+    });
+  }
+
   // ----------------------
   // User
   // ----------------------
@@ -14,6 +26,7 @@ async function main() {
     data: {
       email: "admin@test.com",
       firebaseUid: "admin-firebase-uid",
+      roleId: ROLE_ID.admin,
     },
   });
 
@@ -21,6 +34,7 @@ async function main() {
     data: {
       email: "mentor@test.com",
       firebaseUid: "mentor-firebase-uid",
+      roleId: ROLE_ID.mentor,
     },
   });
 
@@ -28,6 +42,7 @@ async function main() {
     data: {
       email: "employee1@test.com",
       firebaseUid: "employee1-firebase-uid",
+      roleId: ROLE_ID.employee,
     },
   });
 
@@ -35,6 +50,7 @@ async function main() {
     data: {
       email: "employee2@test.com",
       firebaseUid: "employee2-firebase-uid",
+      roleId: ROLE_ID.sales,
     },
   });
 
