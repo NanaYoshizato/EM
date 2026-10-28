@@ -3,48 +3,45 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     $transaction: vi.fn(),
+    $queryRaw: vi.fn(),
     employee: {
       update: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
       findFirst: vi.fn(),
     },
-    employeeStudiedFramework: {
-      deleteMany: vi.fn(),
-      createMany: vi.fn(),
-    },
-    employeeAvailableFramework: {
-      deleteMany: vi.fn(),
-      createMany: vi.fn(),
-    },
   },
 }));
 
 import {
-  createEmployeeWithUser,
+  findLastEmployeeCode,
+  insertEmployee,
   updateEmployee,
+  findPreviousCompanyDates,
   getEmployeeList,
   getEmployeeDetails,
 } from "../repository";
 import { prisma } from "@/lib/prisma";
-import { Gender, EmployeeStatus } from "@prisma/client";
+import {
+  Gender,
+  EmployeeStatus,
+  Specialty,
+  WorkStatus,
+  Prisma,
+} from "@prisma/client";
+import { Employee, InvalidDateRangeError } from "../domain/employee";
+import {
+  DuplicateFieldError,
+  EmployeeNotFoundError,
+  InvalidSkillIdError,
+} from "../errors";
 
 const mockTransaction = vi.mocked(prisma.$transaction);
+const mockQueryRaw = vi.mocked(prisma.$queryRaw);
 const mockEmployeeUpdate = vi.mocked(prisma.employee.update);
 const mockEmployeeFindMany = vi.mocked(prisma.employee.findMany);
 const mockEmployeeFindUnique = vi.mocked(prisma.employee.findUnique);
-const mockStudiedDeleteMany = vi.mocked(
-  prisma.employeeStudiedFramework.deleteMany,
-);
-const mockStudiedCreateMany = vi.mocked(
-  prisma.employeeStudiedFramework.createMany,
-);
-const mockAvailableDeleteMany = vi.mocked(
-  prisma.employeeAvailableFramework.deleteMany,
-);
-const mockAvailableCreateMany = vi.mocked(
-  prisma.employeeAvailableFramework.createMany,
-);
+const mockEmployeeFindFirst = vi.mocked(prisma.employee.findFirst);
 
 const baseInput = {
   email: "test@example.com",
@@ -52,6 +49,10 @@ const baseInput = {
   name: "山田太郎",
   furigana: "ヤマダタロウ",
   gender: Gender.MALE,
+  specialty: Specialty.UNDECIDED,
+  workStatus: WorkStatus.WAITING,
+  skills: [],
+  projects: [],
 };
 
 beforeEach(() => {
@@ -59,32 +60,96 @@ beforeEach(() => {
 });
 
 type TxMock = {
-  employee: { update: typeof mockEmployeeUpdate };
-  employeeStudiedFramework: {
-    deleteMany: typeof mockStudiedDeleteMany;
-    createMany: typeof mockStudiedCreateMany;
+  employee: {
+    update: typeof mockEmployeeUpdate;
+    findFirst: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
   };
-  employeeAvailableFramework: {
-    deleteMany: typeof mockAvailableDeleteMany;
-    createMany: typeof mockAvailableCreateMany;
-  };
+  skill: { findMany: ReturnType<typeof vi.fn> };
 };
 
-describe("createEmployeeWithUser", () => {
-  it("トランザクション内でUser+Employeeを作成する", async () => {
-    const expected = { userId: 1, employeeId: 1 };
-    mockTransaction.mockResolvedValue(expected);
+const runTransactionWith = (tx: Partial<TxMock>) => {
+  (
+    mockTransaction as unknown as {
+      mockImplementation: (
+        fn: (cb: (tx: TxMock) => Promise<unknown>) => Promise<unknown>,
+      ) => void;
+    }
+  ).mockImplementation(async (callback) => callback(tx as TxMock));
+};
 
-    const result = await createEmployeeWithUser(baseInput);
+describe("findLastEmployeeCode", () => {
+  it("既存社員コードの最大値を返す", async () => {
+    mockQueryRaw.mockResolvedValue([{ employee_code: "EMP101" }]);
 
-    expect(mockTransaction).toHaveBeenCalledOnce();
-    expect(result).toEqual(expected);
+    const result = await findLastEmployeeCode();
+
+    expect(result).toBe("EMP101");
   });
 
-  it("トランザクションが失敗した場合エラーを投げる", async () => {
-    mockTransaction.mockRejectedValue(new Error("DB error"));
+  it("社員が1人もいない場合、nullを返す", async () => {
+    mockQueryRaw.mockResolvedValue([]);
 
-    await expect(createEmployeeWithUser(baseInput)).rejects.toThrow("DB error");
+    const result = await findLastEmployeeCode();
+
+    expect(result).toBeNull();
+  });
+});
+
+describe("insertEmployee", () => {
+  it("Employee集約が持つ社員コード・変換済みの値をそのまま永続化する", async () => {
+    const create = vi.fn().mockResolvedValue({ id: 6 });
+    runTransactionWith({
+      employee: { findFirst: vi.fn(), create, update: mockEmployeeUpdate },
+      skill: { findMany: vi.fn() },
+    });
+    const employee = Employee.create(baseInput, "EMP005");
+
+    const result = await insertEmployee(employee, baseInput);
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ employeeCode: "EMP006" }),
+      }),
+    );
+    expect(result).toEqual({ employeeId: 6 });
+  });
+
+  it("一意制約違反（P2002）をDuplicateFieldErrorに変換する", async () => {
+    mockTransaction.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "6.19.3",
+        meta: { target: ["email"] },
+      }),
+    );
+    const employee = Employee.create(baseInput, null);
+
+    const error = await insertEmployee(employee, baseInput).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(DuplicateFieldError);
+    expect((error as InstanceType<typeof DuplicateFieldError>).field).toBe(
+      "email",
+    );
+  });
+
+  it("存在しないskillIdの場合、InvalidSkillIdErrorを投げる", async () => {
+    runTransactionWith({
+      employee: { findFirst: vi.fn(), create: vi.fn(), update: mockEmployeeUpdate },
+      skill: { findMany: vi.fn().mockResolvedValue([{ id: 1 }]) },
+    });
+    const data = {
+      ...baseInput,
+      skills: [
+        { skillId: 1, years: 1 },
+        { skillId: 999, years: 1 },
+      ],
+    };
+    const employee = Employee.create(data, null);
+
+    await expect(insertEmployee(employee, data)).rejects.toBeInstanceOf(
+      InvalidSkillIdError,
+    );
   });
 });
 
@@ -93,18 +158,13 @@ describe("updateEmployee", () => {
   const updateData = { name: "Updated Name", phone: "09012345678" };
 
   it("社員情報を更新する", async () => {
-    (mockTransaction as unknown as { mockImplementation: (fn: (cb: (tx: TxMock) => Promise<unknown>) => Promise<unknown>) => void }).mockImplementation(async (callback) => {
-      return callback({
-        employee: { update: mockEmployeeUpdate },
-        employeeStudiedFramework: {
-          deleteMany: mockStudiedDeleteMany,
-          createMany: mockStudiedCreateMany,
-        },
-        employeeAvailableFramework: {
-          deleteMany: mockAvailableDeleteMany,
-          createMany: mockAvailableCreateMany,
-        },
-      });
+    runTransactionWith({
+      employee: {
+        findFirst: vi.fn().mockResolvedValue({ id: employeeId }),
+        update: mockEmployeeUpdate,
+        create: vi.fn(),
+      },
+      skill: { findMany: vi.fn() },
     });
     mockEmployeeUpdate.mockResolvedValue({ id: 1 } as never);
 
@@ -119,44 +179,114 @@ describe("updateEmployee", () => {
     });
   });
 
-  it("フレームワーク情報を更新する", async () => {
-    const frameworkUpdateData = {
-      studiedFrameworkIds: [1, 2],
-      availableFrameworkIds: [3],
-    };
+  it("存在しない社員の場合、EmployeeNotFoundErrorを投げる", async () => {
+    runTransactionWith({
+      employee: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        update: mockEmployeeUpdate,
+        create: vi.fn(),
+      },
+      skill: { findMany: vi.fn() },
+    });
 
-    (mockTransaction as unknown as { mockImplementation: (fn: (cb: (tx: TxMock) => Promise<unknown>) => Promise<unknown>) => void }).mockImplementation(async (callback) => {
-      return callback({
-        employee: { update: mockEmployeeUpdate },
-        employeeStudiedFramework: {
-          deleteMany: mockStudiedDeleteMany,
-          createMany: mockStudiedCreateMany,
-        },
-        employeeAvailableFramework: {
-          deleteMany: mockAvailableDeleteMany,
-          createMany: mockAvailableCreateMany,
-        },
-      });
-    });
-    mockEmployeeUpdate.mockResolvedValue({ id: 1 } as never);
+    await expect(
+      updateEmployee(employeeId, updateData),
+    ).rejects.toBeInstanceOf(EmployeeNotFoundError);
+    expect(mockEmployeeUpdate).not.toHaveBeenCalled();
+  });
 
-    await updateEmployee(employeeId, frameworkUpdateData);
+  it("一意制約違反（P2002）をDuplicateFieldErrorに変換する", async () => {
+    mockTransaction.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "6.19.3",
+        meta: { target: ["my_number"] },
+      }),
+    );
 
-    expect(mockStudiedDeleteMany).toHaveBeenCalledWith({
-      where: { employeeId },
+    const error = await updateEmployee(employeeId, updateData).catch(
+      (e: unknown) => e,
+    );
+
+    expect(error).toBeInstanceOf(DuplicateFieldError);
+    expect((error as InstanceType<typeof DuplicateFieldError>).field).toBe(
+      "my_number",
+    );
+  });
+
+  it("案件履歴の日付が不正な場合、InvalidDateRangeErrorを投げ更新しない", async () => {
+    runTransactionWith({
+      employee: {
+        findFirst: vi.fn().mockResolvedValue({ id: employeeId }),
+        update: mockEmployeeUpdate,
+        create: vi.fn(),
+      },
+      skill: { findMany: vi.fn() },
     });
-    expect(mockStudiedCreateMany).toHaveBeenCalledWith({
-      data: [
-        { employeeId, frameworkId: 1 },
-        { employeeId, frameworkId: 2 },
-      ],
+
+    await expect(
+      updateEmployee(employeeId, {
+        projects: [
+          {
+            active: false,
+            projectName: "案件A",
+            factory: "現場A",
+            skills: [],
+            startDate: "2026-02-01",
+            endDate: "2026-01-01",
+            contracts: [],
+          },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(InvalidDateRangeError);
+    expect(mockEmployeeUpdate).not.toHaveBeenCalled();
+  });
+
+  it("skillsが重複している場合、例外を投げ更新しない", async () => {
+    await expect(
+      updateEmployee(employeeId, {
+        skills: [
+          { skillId: 1, years: 1 },
+          { skillId: 1, years: 2 },
+        ],
+      }),
+    ).rejects.toThrow("スキルが重複して指定されています");
+    expect(mockEmployeeUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("findPreviousCompanyDates", () => {
+  it("保存済みの前職日付をYYYY-MM-DD文字列に変換して返す", async () => {
+    mockEmployeeFindFirst.mockResolvedValue({
+      previousCompany1StartDate: new Date("2020-01-01"),
+      previousCompany1EndDate: new Date("2020-12-31"),
+      previousCompany2StartDate: null,
+      previousCompany2EndDate: null,
+      previousCompany3StartDate: null,
+      previousCompany3EndDate: null,
+    } as never);
+
+    const result = await findPreviousCompanyDates(1);
+
+    expect(mockEmployeeFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1, isDelete: false } }),
+    );
+    expect(result).toEqual({
+      previousCompany1StartDate: "2020-01-01",
+      previousCompany1EndDate: "2020-12-31",
+      previousCompany2StartDate: null,
+      previousCompany2EndDate: null,
+      previousCompany3StartDate: null,
+      previousCompany3EndDate: null,
     });
-    expect(mockAvailableDeleteMany).toHaveBeenCalledWith({
-      where: { employeeId },
-    });
-    expect(mockAvailableCreateMany).toHaveBeenCalledWith({
-      data: [{ employeeId, frameworkId: 3 }],
-    });
+  });
+
+  it("存在しない・論理削除済みの場合、nullを返す", async () => {
+    mockEmployeeFindFirst.mockResolvedValue(null);
+
+    const result = await findPreviousCompanyDates(9999);
+
+    expect(result).toBeNull();
   });
 });
 
@@ -170,7 +300,6 @@ describe("getEmployeeList", () => {
         status: EmployeeStatus;
         contractPrice: number | null;
         startDate: Date | null;
-        frameworks: Array<{ framework: { frameworkName: string } }>;
       }>;
     }>,
   ) => ({
@@ -192,7 +321,6 @@ describe("getEmployeeList", () => {
             status: EmployeeStatus.WORKING,
             contractPrice: 680000,
             startDate: new Date("2026-01-01"),
-            frameworks: [{ framework: { frameworkName: "React" } }],
           },
         ],
       }),
@@ -216,7 +344,6 @@ describe("getEmployeeList", () => {
         employeeId: 1,
         employeeCode: "EMP001",
         name: "John Doe",
-        frameworks: ["React"],
         contractPrice: 680000,
         status: EmployeeStatus.WORKING,
       },
@@ -224,7 +351,6 @@ describe("getEmployeeList", () => {
         employeeId: 2,
         employeeCode: "EMP002",
         name: "Jane Smith",
-        frameworks: [],
         contractPrice: null,
         status: null,
       },
@@ -291,9 +417,10 @@ describe("getEmployeeDetails", () => {
     gender: Gender.MALE,
     phone: null,
     joinDate: null,
+    specialty: "UNDECIDED",
+    workStatus: "WAITING",
+    gitHub: null,
     trainingEndDate: null,
-    studiedFrameworks: [],
-    availableFrameworks: [],
     previousCompany1Name: null,
     previousCompany1StartDate: null,
     previousCompany1EndDate: null,

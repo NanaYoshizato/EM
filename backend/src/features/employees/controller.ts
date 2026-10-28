@@ -6,7 +6,6 @@ import {
   getEmployeeListService,
   getEmployeeDetailsService,
 } from "./service";
-import { DuplicateEmailError } from "./repository";
 import type {
   createEmployeeRoute,
   updateEmployeeRoute,
@@ -20,15 +19,26 @@ export const createEmployeeController: RouteHandler<
   const body = c.req.valid("json");
 
   try {
-    await createEmployee(body);
-    return c.body(null, 201);
+    const result = await createEmployee(body);
+    if (result.code === "SUCCESS") {
+      return c.body(null, 201);
+    }
+    switch (result.code) {
+      case "DUPLICATE_EMAIL":
+        return c.json({ error: "メールアドレスが既に使用されています" }, 400);
+      case "DUPLICATE_MY_NUMBER":
+        return c.json({ error: "マイナンバーが既に使用されています" }, 400);
+      case "DUPLICATE_EMPLOYEE_CODE":
+        return c.json(
+          { error: "社員コードが重複しました。もう一度お試しください" },
+          400,
+        );
+      case "INVALID_SKILL_ID":
+        return c.json({ error: "指定されたスキルが存在しません" }, 400);
+      case "INVALID_DATE_RANGE":
+        return c.json({ error: result.message }, 400);
+    }
   } catch (error: unknown) {
-    if (error instanceof DuplicateEmailError) {
-      return c.json({ error: "メールアドレスが既に使用されています" }, 400);
-    }
-    if (error instanceof Error && error.message.includes("Unique constraint")) {
-      return c.json({ error: "メールアドレスが既に使用されています" }, 400);
-    }
     console.error(error);
     return c.json({ error: "サーバーエラーが発生しました" }, 500);
   }
@@ -42,12 +52,21 @@ export const updateEmployeeController: RouteHandler<
   const body = c.req.valid("json");
 
   try {
-    await updateEmployeeService(employeeId, body);
-    return c.body(null, 200);
-  } catch (error: unknown) {
-    if (error instanceof Error && error.message.includes("NotFound")) {
-      return c.json({ error: "社員が見つかりません" }, 404);
+    const result = await updateEmployeeService(employeeId, body);
+    if (result.code === "SUCCESS") {
+      return c.body(null, 200);
     }
+    switch (result.code) {
+      case "NOT_FOUND":
+        return c.json({ error: "社員が見つかりません" }, 404);
+      case "DUPLICATE_MY_NUMBER":
+        return c.json({ error: "マイナンバーが既に使用されています" }, 400);
+      case "INVALID_SKILL_ID":
+        return c.json({ error: "指定されたスキルが存在しません" }, 400);
+      case "INVALID_DATE_RANGE":
+        return c.json({ error: result.message }, 400);
+    }
+  } catch (error: unknown) {
     console.error(error);
     return c.json({ error: "サーバーエラーが発生しました" }, 500);
   }
@@ -72,8 +91,6 @@ export const getEmployeeListController: RouteHandler<
 
 type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
   include: {
-    studiedFrameworks: { include: { framework: true } };
-    availableFrameworks: { include: { framework: true } };
     assignments: {
       where: { isDelete: false };
       orderBy: { startDate: "desc" };
@@ -102,16 +119,6 @@ export const mapEmployeeDetailsResponse = (
   phone: employee.phone ?? null,
   joinDate: toIso(employee.joinDate),
   trainingEndDate: toIso(employee.trainingEndDate),
-  studiedFrameworkIds:
-    employee.studiedFrameworks?.map((item) => item.frameworkId) ?? [],
-  availableFrameworkIds:
-    employee.availableFrameworks?.map((item) => item.frameworkId) ?? [],
-  studiedFrameworkNames:
-    employee.studiedFrameworks?.map((item) => item.framework.frameworkName) ??
-    [],
-  availableFrameworkNames:
-    employee.availableFrameworks?.map((item) => item.framework.frameworkName) ??
-    [],
   status: employee.assignments?.[0]?.status ?? null,
   previousCompany1Name: employee.previousCompany1Name ?? null,
   previousCompany1StartDate: toIso(employee.previousCompany1StartDate),

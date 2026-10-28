@@ -44,6 +44,7 @@ describe("createEmployeeController", () => {
   it("should return 201 with no body", async () => {
     const body = { email: "test@example.com", name: "Test" };
     const expectedResponse = { status: 201 };
+    mockCreateEmployee.mockResolvedValue({ code: "SUCCESS", employeeId: 1 });
     const c = {
       req: {
         valid: vi.fn().mockReturnValue(body),
@@ -62,9 +63,7 @@ describe("createEmployeeController", () => {
 
   it("should return 400 when email is duplicate", async () => {
     const body = { email: "test@example.com", name: "Test" };
-    mockCreateEmployee.mockRejectedValue(
-      new Error("Unique constraint failed on the fields: (`email`"),
-    );
+    mockCreateEmployee.mockResolvedValue({ code: "DUPLICATE_EMAIL" });
     const c = {
       req: {
         valid: vi.fn().mockReturnValue(body),
@@ -81,12 +80,47 @@ describe("createEmployeeController", () => {
     );
     expect(result).toEqual({ status: 400 });
   });
+
+  it("should return 400 when myNumber is duplicate", async () => {
+    const body = { email: "test@example.com", name: "Test" };
+    mockCreateEmployee.mockResolvedValue({ code: "DUPLICATE_MY_NUMBER" });
+    const c = {
+      req: { valid: vi.fn().mockReturnValue(body) },
+      body: vi.fn(),
+      json: vi.fn().mockReturnValue({ status: 400 }),
+    } as unknown as CreateCtx;
+
+    await createEmployeeController(c, vi.fn());
+
+    expect(c.json).toHaveBeenCalledWith(
+      { error: "マイナンバーが既に使用されています" },
+      400,
+    );
+  });
+
+  it("should return 400 when skillId does not exist", async () => {
+    const body = { email: "test@example.com", name: "Test" };
+    mockCreateEmployee.mockResolvedValue({ code: "INVALID_SKILL_ID" });
+    const c = {
+      req: { valid: vi.fn().mockReturnValue(body) },
+      body: vi.fn(),
+      json: vi.fn().mockReturnValue({ status: 400 }),
+    } as unknown as CreateCtx;
+
+    await createEmployeeController(c, vi.fn());
+
+    expect(c.json).toHaveBeenCalledWith(
+      { error: "指定されたスキルが存在しません" },
+      400,
+    );
+  });
 });
 
 describe("updateEmployeeController", () => {
   it("should return 200 with no body", async () => {
     const updateBody = { name: "Updated Name" };
     const expectedResponse = { status: 200 };
+    mockUpdateEmployeeService.mockResolvedValue({ code: "SUCCESS" });
     const c = {
       req: {
         param: vi.fn().mockReturnValue({ id: 1 }),
@@ -105,9 +139,33 @@ describe("updateEmployeeController", () => {
     expect(result).toBe(expectedResponse);
   });
 
+  it("案件履歴の日付が不正な場合は400を返す", async () => {
+    const updateBody = { name: "Updated Name" };
+    mockUpdateEmployeeService.mockResolvedValue({
+      code: "INVALID_DATE_RANGE",
+      message: "案件履歴の終了日は開始日以降である必要があります",
+    });
+    const c = {
+      req: {
+        param: vi.fn().mockReturnValue({ id: 1 }),
+        valid: vi.fn().mockReturnValue(updateBody),
+      },
+      body: vi.fn(),
+      json: vi.fn().mockReturnValue({ status: 400 }),
+    } as unknown as UpdateCtx;
+
+    const result = await updateEmployeeController(c, vi.fn());
+
+    expect(c.json).toHaveBeenCalledWith(
+      { error: "案件履歴の終了日は開始日以降である必要があります" },
+      400,
+    );
+    expect(result).toEqual({ status: 400 });
+  });
+
   it("should return 404 when employee is not found", async () => {
     const updateBody = { name: "Updated Name" };
-    mockUpdateEmployeeService.mockRejectedValue(new Error("NotFound"));
+    mockUpdateEmployeeService.mockResolvedValue({ code: "NOT_FOUND" });
     const c = {
       req: {
         param: vi.fn().mockReturnValue({ id: 1 }),
@@ -122,6 +180,28 @@ describe("updateEmployeeController", () => {
     expect(c.json).toHaveBeenCalledWith({ error: "社員が見つかりません" }, 404);
     expect(result).toEqual({ status: 404 });
   });
+
+  it("should return 400 when myNumber is duplicate", async () => {
+    const updateBody = { myNumber: "123456789012" };
+    mockUpdateEmployeeService.mockResolvedValue({
+      code: "DUPLICATE_MY_NUMBER",
+    });
+    const c = {
+      req: {
+        param: vi.fn().mockReturnValue({ id: 1 }),
+        valid: vi.fn().mockReturnValue(updateBody),
+      },
+      body: vi.fn(),
+      json: vi.fn().mockReturnValue({ status: 400 }),
+    } as unknown as UpdateCtx;
+
+    await updateEmployeeController(c, vi.fn());
+
+    expect(c.json).toHaveBeenCalledWith(
+      { error: "マイナンバーが既に使用されています" },
+      400,
+    );
+  });
 });
 
 describe("getEmployeeListController", () => {
@@ -131,7 +211,6 @@ describe("getEmployeeListController", () => {
         employeeId: 1,
         employeeCode: "EMP001",
         name: "John",
-        frameworks: ["React"],
         contractPrice: 680000,
         status: "WORKING" as const,
       },
@@ -184,49 +263,10 @@ describe("getEmployeeDetailsController", () => {
       gender: Gender.MALE,
       phone: null,
       joinDate: null,
+      specialty: "UNDECIDED" as const,
+      workStatus: "WAITING" as const,
+      gitHub: null,
       trainingEndDate: null,
-      studiedFrameworks: [
-        {
-          id: 1,
-          employeeId: 1,
-          frameworkId: 1,
-          framework: {
-            id: 1,
-            frameworkName: "React",
-            isDelete: false,
-            createrId: null,
-            createdAt: new Date("2026-01-01"),
-            updaterId: null,
-            updatedAt: new Date("2026-01-01"),
-          },
-          isDelete: false,
-          createrId: null,
-          createdAt: new Date("2026-01-01"),
-          updaterId: null,
-          updatedAt: new Date("2026-01-01"),
-        },
-      ],
-      availableFrameworks: [
-        {
-          id: 2,
-          employeeId: 1,
-          frameworkId: 2,
-          framework: {
-            id: 2,
-            frameworkName: "Vue",
-            isDelete: false,
-            createrId: null,
-            createdAt: new Date("2026-01-01"),
-            updaterId: null,
-            updatedAt: new Date("2026-01-01"),
-          },
-          isDelete: false,
-          createrId: null,
-          createdAt: new Date("2026-01-01"),
-          updaterId: null,
-          updatedAt: new Date("2026-01-01"),
-        },
-      ],
       assignments: [{ status: "WORKING" as const }],
       previousCompany1Name: null,
       previousCompany1StartDate: null,

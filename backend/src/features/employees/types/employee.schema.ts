@@ -1,98 +1,538 @@
 import { z } from "zod";
-import { Gender, EmployeeStatus } from "@prisma/client";
+import { Gender, EmployeeStatus, Specialty, WorkStatus } from "@prisma/client";
 
 export const createEmployeeSchema = z.object({
-  email: z.string().email(),
+  /* メールアドレス */
+  email: z.email(),
 
-  name: z.string(),
-  furigana: z.string(),
-  birthDate: z.string(),
-  gender: z.nativeEnum(Gender),
-  phone: z.string().optional(),
+  /* 氏名 */
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(50),
 
-  joinDate: z.string().optional(),
-  trainingEndDate: z.string().optional(),
+  /* フリガナ */
+  furigana: z
+    .string()
+    .trim()
+    .min(1)
+    .max(50),
 
-  previousCompany1Name: z.string().optional(),
-  previousCompany1StartDate: z.string().optional(),
-  previousCompany1EndDate: z.string().optional(),
-  previousCompany2Name: z.string().optional(),
-  previousCompany2StartDate: z.string().optional(),
-  previousCompany2EndDate: z.string().optional(),
-  previousCompany3Name: z.string().optional(),
-  previousCompany3StartDate: z.string().optional(),
-  previousCompany3EndDate: z.string().optional(),
+  /* 生年月日 */
+  birthDate: z.iso.date(),
 
-  weeklyWorkHours: z.string().optional(),
-  monthlyEstimatedSalary: z.coerce.number().min(0).optional(),
+  /* 性別 */
+  gender: z.enum(Gender),
 
-  postalCode: z.string().optional(),
-  prefecture: z.string().optional(),
-  city: z.string().optional(),
-  streetAddress: z.string().optional(),
+  /* 電話番号 */
+  phone: z
+    .string()
+    .regex(/^0\d{1,4}-?\d{1,4}-?\d{4}$/)
+    .optional(),
 
-  emergencyContactName: z.string().optional(),
-  emergencyContactRelationship: z.string().optional(),
-  emergencyContactPhone: z.string().optional(),
+  /* 入社年月 */
+  joinDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional(),
 
-  hasSpouse: z.string().optional(),
-  hasChildren: z.string().optional(),
-  hasDependents: z.string().optional(),
+  /* 専門領域 */
+  specialty: z.enum(Specialty),
 
-  myNumber: z.string().optional(),
-  employmentInsuranceNumber: z.string().optional(),
-  basicPensionNumber: z.string().optional(),
-  salaryAccount: z.string().optional(),
+  /* 稼働ステータス */
+  workStatus: z.enum(WorkStatus),
 
-  studiedFrameworkIds: z.array(z.number()).optional(),
-  availableFrameworkIds: z.array(z.number()).optional(),
+  /* GitHubユーザー名 */
+  gitHub: z
+    .string()
+    .trim()
+    .max(39)
+    .optional(),
+
+  /* 研修終了日 */
+  trainingEndDate: z.iso.date().optional(),
+
+  /* 前職1社目の会社名 */
+  previousCompany1Name: z
+    .string()
+    .trim()
+    .max(100)
+    .optional(),
+
+  /* 前職1社目の在籍開始日 */
+  previousCompany1StartDate: z.iso.date().optional(),
+
+  /* 前職1社目の在籍終了日 */
+  previousCompany1EndDate: z.iso.date().optional(),
+
+  /* 前職2社目の会社名 */
+  previousCompany2Name: z
+    .string()
+    .trim()
+    .max(100)
+    .optional(),
+
+  /* 前職2社目の在籍開始日 */
+  previousCompany2StartDate: z.iso.date().optional(),
+
+  /* 前職2社目の在籍終了日 */
+  previousCompany2EndDate: z.iso.date().optional(),
+
+  /* 前職3社目の会社名 */
+  previousCompany3Name: z
+    .string()
+    .trim()
+    .max(100)
+    .optional(),
+
+  /* 前職3社目の在籍開始日 */
+  previousCompany3StartDate: z.iso.date().optional(),
+
+  /* 前職3社目の在籍終了日 */
+  previousCompany3EndDate: z.iso.date().optional(),
+
+  /* 週あたり稼働時間 */
+  weeklyWorkHours: z
+    .string()
+    .trim()
+    .max(20)
+    .optional(),
+
+  /* 月額想定給与 */
+  monthlyEstimatedSalary: z
+    .coerce.number()
+    .int()
+    .min(0)
+    .optional(),
+
+  /* 郵便番号 */
+  postalCode: z
+    .string()
+    .regex(/^\d{3}-?\d{4}$/)
+    .optional(),
+
+  /* 都道府県 */
+  prefecture: z
+    .string()
+    .trim()
+    .max(10)
+    .optional(),
+
+  /* 市区町村 */
+  city: z
+    .string()
+    .trim()
+    .max(100)
+    .optional(),
+
+  /* 番地・建物名 */
+  streetAddress: z
+    .string()
+    .trim()
+    .max(100)
+    .optional(),
+
+  /* 緊急連絡先氏名 */
+  emergencyContactName: z
+    .string()
+    .trim()
+    .max(50)
+    .optional(),
+
+  /* 緊急連絡先続柄 */
+  emergencyContactRelationship: z
+    .string()
+    .trim()
+    .max(20)
+    .optional(),
+
+  /* 緊急連絡先電話番号 */
+  emergencyContactPhone: z
+    .string()
+    .regex(/^0\d{1,4}-?\d{1,4}-?\d{4}$/)
+    .optional(),
+
+  /* 配偶者の有無 */
+  hasSpouse: z.enum(["有", "無"]).optional(),
+
+  /* 子の有無 */
+  hasChildren: z.enum(["有", "無"]).optional(),
+
+  /* 扶養家族の有無 */
+  hasDependents: z.enum(["有", "無"]).optional(),
+
+  /* マイナンバー */
+  myNumber: z
+    .string()
+    .regex(/^\d{12}$/)
+    .optional(),
+
+  /* 雇用保険番号 */
+  employmentInsuranceNumber: z
+    .string()
+    .regex(/^\d{4}-\d{6}-\d{1}$/)
+    .optional(),
+
+  /* 基礎年金番号 */
+  basicPensionNumber: z
+    .string()
+    .regex(/^\d{4}-\d{6}$/)
+    .optional(),
+
+  /* 給与振込口座 */
+  salaryAccount: z
+    .string()
+    .trim()
+    .max(100)
+    .optional(),
+
+  /* 保有スキル */
+  skills: z
+    .array(
+      z.object({
+        /* スキルID */
+        skillId: z
+          .number()
+          .int()
+          .positive(),
+        /* 経験年数 */
+        years: z.coerce.number().min(0),
+      }),
+    )
+    .max(50)
+    .refine(
+      (skills) => new Set(skills.map((skill) => skill.skillId)).size === skills.length,
+      "スキルが重複して指定されています",
+    ),
+
+  /* 案件履歴 */
+  projects: z
+    .array(
+      z.object({
+        /* 稼働中か */
+        active: z.boolean(),
+
+        /* 案件名 */
+        projectName: z
+          .string()
+          .trim()
+          .min(1)
+          .max(100),
+
+        /* 常駐先企業名 */
+        factory: z
+          .string()
+          .trim()
+          .min(1)
+          .max(100),
+
+        /* 使用スキルのID一覧 */
+        skills: z.array(z
+          .number()
+          .int()
+          .positive()
+        )
+          .max(20)
+          .refine(
+            (ids) => new Set(ids).size === ids.length,
+            "スキルが重複して指定されています",
+          ),
+
+        /* 参画開始日 */
+        startDate: z.iso.date(),
+
+        /* 参画終了日 */
+        endDate: z.iso.date().optional(),
+
+        /* 契約単価履歴 */
+        contracts: z
+          .array(
+            z.object({
+              /* 適用開始日 */
+              startDate: z.iso.date(),
+
+              /* 契約単価 */
+              unitPrice: z
+                .coerce.number()
+                .int()
+                .min(0)
+                .optional(),
+            }),
+          )
+          .max(20),
+      }),
+    )
+    .max(50),
 });
 
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 
 export const updateEmployeeSchema = z.object({
-  name: z.string().optional(),
-  furigana: z.string().optional(),
-  birthDate: z.string().optional(),
-  gender: z.nativeEnum(Gender).optional(),
-  phone: z.string().optional(),
+  /* 氏名 */
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(50)
+    .optional(),
 
-  joinDate: z.string().optional(),
-  trainingEndDate: z.string().optional(),
+  /* フリガナ */
+  furigana: z
+    .string()
+    .trim()
+    .min(1)
+    .max(50)
+    .optional(),
 
-  previousCompany1Name: z.string().optional(),
-  previousCompany1StartDate: z.string().optional(),
-  previousCompany1EndDate: z.string().optional(),
-  previousCompany2Name: z.string().optional(),
-  previousCompany2StartDate: z.string().optional(),
-  previousCompany2EndDate: z.string().optional(),
-  previousCompany3Name: z.string().optional(),
-  previousCompany3StartDate: z.string().optional(),
-  previousCompany3EndDate: z.string().optional(),
+  /* 生年月日 */
+  birthDate: z.iso.date().optional(),
 
-  weeklyWorkHours: z.string().optional(),
-  monthlyEstimatedSalary: z.coerce.number().min(0).optional(),
+  /* 性別 */
+  gender: z.enum(Gender).optional(),
 
-  postalCode: z.string().optional(),
-  prefecture: z.string().optional(),
-  city: z.string().optional(),
-  streetAddress: z.string().optional(),
+  /* 電話番号 */
+  phone: z
+    .string()
+    .regex(/^0\d{1,4}-?\d{1,4}-?\d{4}$/)
+    .optional(),
 
-  emergencyContactName: z.string().optional(),
-  emergencyContactRelationship: z.string().optional(),
-  emergencyContactPhone: z.string().optional(),
+  /* 入社年月 */
+  joinDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, "入社年月はYYYY-MM形式で入力してください。")
+    .optional(),
 
-  hasSpouse: z.string().optional(),
-  hasChildren: z.string().optional(),
-  hasDependents: z.string().optional(),
+  /* 専門領域 */
+  specialty: z.enum(Specialty).optional(),
 
-  myNumber: z.string().optional(),
-  employmentInsuranceNumber: z.string().optional(),
-  basicPensionNumber: z.string().optional(),
-  salaryAccount: z.string().optional(),
+  /* 稼働ステータス */
+  workStatus: z.enum(WorkStatus).optional(),
 
-  studiedFrameworkIds: z.array(z.number()).optional(),
-  availableFrameworkIds: z.array(z.number()).optional(),
+  /* GitHubユーザー名 */
+  gitHub: z
+    .string()
+    .trim()
+    .max(39)
+    .optional(),
+
+  /* 研修終了日 */
+  trainingEndDate: z.iso.date().optional(),
+
+  /* 前職1社目の会社名 */
+  previousCompany1Name: z
+    .string()
+    .trim()
+    .max(100)
+    .optional(),
+
+  /* 前職1社目の在籍開始日 */
+  previousCompany1StartDate: z.iso.date().optional(),
+
+  /* 前職1社目の在籍終了日 */
+  previousCompany1EndDate: z.iso.date().optional(),
+
+  /* 前職2社目の会社名 */
+  previousCompany2Name: z
+    .string()
+    .trim()
+    .max(100)
+    .optional(),
+
+  /* 前職2社目の在籍開始日 */
+  previousCompany2StartDate: z.iso.date().optional(),
+
+  /* 前職2社目の在籍終了日 */
+  previousCompany2EndDate: z.iso.date().optional(),
+
+  /* 前職3社目の会社名 */
+  previousCompany3Name: z
+    .string()
+    .trim()
+    .max(100)
+    .optional(),
+
+  /* 前職3社目の在籍開始日 */
+  previousCompany3StartDate: z.iso.date().optional(),
+
+  /* 前職3社目の在籍終了日 */
+  previousCompany3EndDate: z.iso.date().optional(),
+
+  /* 週あたり稼働時間 */
+  weeklyWorkHours: z
+    .string()
+    .trim()
+    .max(20)
+    .optional(),
+
+  /* 月額想定給与 */
+  monthlyEstimatedSalary: z
+    .coerce.number()
+    .int()
+    .min(0)
+    .optional(),
+
+  /* 郵便番号 */
+  postalCode: z
+    .string()
+    .regex(/^\d{3}-?\d{4}$/)
+    .optional(),
+
+  /* 都道府県 */
+  prefecture: z
+    .string()
+    .trim()
+    .max(10)
+    .optional(),
+
+  /* 市区町村 */
+  city: z
+    .string()
+    .trim()
+    .max(100)
+    .optional(),
+
+  /* 番地・建物名 */
+  streetAddress: z
+    .string()
+    .trim()
+    .max(100)
+    .optional(),
+
+  /* 緊急連絡先氏名 */
+  emergencyContactName: z
+    .string()
+    .trim()
+    .max(50)
+    .optional(),
+
+  /* 緊急連絡先続柄 */
+  emergencyContactRelationship: z
+    .string()
+    .trim()
+    .max(20)
+    .optional(),
+
+  /* 緊急連絡先電話番号 */
+  emergencyContactPhone: z
+    .string()
+    .regex(/^0\d{1,4}-?\d{1,4}-?\d{4}$/)
+    .optional(),
+
+  /* 配偶者の有無 */
+  hasSpouse: z.enum(["有", "無"]).optional(),
+
+  /* 子の有無 */
+  hasChildren: z.enum(["有", "無"]).optional(),
+
+  /* 扶養家族の有無 */
+  hasDependents: z.enum(["有", "無"]).optional(),
+
+  /* マイナンバー */
+  myNumber: z
+    .string()
+    .regex(/^\d{12}$/)
+    .optional(),
+
+  /* 雇用保険番号 */
+  employmentInsuranceNumber: z
+    .string()
+    .regex(/^\d{4}-\d{6}-\d{1}$/)
+    .optional(),
+
+  /* 基礎年金番号 */
+  basicPensionNumber: z
+    .string()
+    .regex(/^\d{4}-\d{6}$/)
+    .optional(),
+
+  /* 給与振込口座 */
+  salaryAccount: z
+    .string()
+    .trim()
+    .max(100)
+    .optional(),
+
+  /* 保有スキル */
+  skills: z
+    .array(
+      z.object({
+        /* スキルID */
+        skillId: z
+          .number()
+          .int()
+          .positive(),
+
+        /* 経験年数 */
+        years: z.coerce.number().min(0),
+      }),
+    )
+    .max(50)
+    .refine(
+      (skills) => new Set(skills.map((skill) => skill.skillId)).size === skills.length,
+      "スキルが重複して指定されています",
+    )
+    .optional(),
+
+  /* 案件履歴 */
+  projects: z
+    .array(
+      z.object({
+        /* 稼働中か */
+        active: z.boolean(),
+
+        /* 案件名 */
+        projectName: z
+          .string()
+          .trim()
+          .min(1)
+          .max(100),
+
+        /* 常駐先企業名 */
+        factory: z
+          .string()
+          .trim()
+          .min(1)
+          .max(100),
+
+        /* 使用スキルのID一覧 */
+        skills: z.array(z
+          .number()
+          .int()
+          .positive()
+        )
+          .max(20)
+          .refine(
+            (ids) => new Set(ids).size === ids.length,
+            "スキルが重複して指定されています",
+          ),
+
+        /* 参画開始日 */
+        startDate: z.iso.date(),
+
+        /* 参画終了日 */
+        endDate: z.iso.date().optional(),
+
+        /* 契約単価履歴 */
+        contracts: z
+          .array(
+            z.object({
+              /* 適用開始日 */
+              startDate: z.iso.date(),
+
+              /* 契約単価 */
+              unitPrice: z
+                .coerce.number()
+                .int()
+                .min(0)
+                .optional(),
+            }),
+          )
+          .max(20),
+      }),
+    )
+    .max(50)
+    .optional(),
 });
 
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
@@ -102,9 +542,8 @@ export const EmployeeListItemSchema = z.object({
   employeeId: z.number(),
   employeeCode: z.string(),
   name: z.string(),
-  frameworks: z.array(z.string()),
   contractPrice: z.number().nullable(),
-  status: z.nativeEnum(EmployeeStatus).nullable(),
+  status: z.enum(EmployeeStatus).nullable(),
 });
 
 export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;
@@ -119,20 +558,16 @@ export const EmployeeListQuerySchema = z.object({
 export const EmployeeDetailsSchema = z.object({
   employeeId: z.number(),
   employeeCode: z.string(),
-  userId: z.number(),
+  userId: z.number().nullable(),
   name: z.string(),
   furigana: z.string().nullable(),
   email: z.string().nullable(),
   birthDate: z.string().nullable(),
-  gender: z.nativeEnum(Gender).nullable(),
+  gender: z.enum(Gender).nullable(),
   phone: z.string().nullable(),
   joinDate: z.string().nullable(),
   trainingEndDate: z.string().nullable(),
-  studiedFrameworkIds: z.array(z.number()),
-  availableFrameworkIds: z.array(z.number()),
-  studiedFrameworkNames: z.array(z.string()),
-  availableFrameworkNames: z.array(z.string()),
-  status: z.nativeEnum(EmployeeStatus).nullable(),
+  status: z.enum(EmployeeStatus).nullable(),
   previousCompany1Name: z.string().nullable(),
   previousCompany1StartDate: z.string().nullable(),
   previousCompany1EndDate: z.string().nullable(),

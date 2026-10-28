@@ -7,23 +7,35 @@ import {
 } from "../service";
 
 vi.mock("../repository", () => ({
-  createEmployeeWithUser: vi.fn(),
+  findLastEmployeeCode: vi.fn(),
+  insertEmployee: vi.fn(),
   updateEmployee: vi.fn(),
+  findPreviousCompanyDates: vi.fn(),
   getEmployeeList: vi.fn(),
   getEmployeeDetails: vi.fn(),
 }));
 
 import {
-  createEmployeeWithUser,
+  findLastEmployeeCode,
+  insertEmployee,
   updateEmployee,
+  findPreviousCompanyDates,
   getEmployeeList,
   getEmployeeDetails,
 } from "../repository";
 
-import { Gender, EmployeeStatus } from "@prisma/client";
+import { Gender, EmployeeStatus, Specialty, WorkStatus } from "@prisma/client";
+import { Employee, InvalidDateRangeError } from "../domain/employee";
+import {
+  DuplicateFieldError,
+  EmployeeNotFoundError,
+  InvalidSkillIdError,
+} from "../errors";
 
-const mockCreateEmployeeWithUser = vi.mocked(createEmployeeWithUser);
+const mockFindLastEmployeeCode = vi.mocked(findLastEmployeeCode);
+const mockInsertEmployee = vi.mocked(insertEmployee);
 const mockUpdateEmployee = vi.mocked(updateEmployee);
+const mockFindPreviousCompanyDates = vi.mocked(findPreviousCompanyDates);
 const mockGetEmployeeList = vi.mocked(getEmployeeList);
 const mockGetEmployeeDetails = vi.mocked(getEmployeeDetails);
 
@@ -33,47 +45,119 @@ const baseInput = {
   furigana: "ヤマダタロウ",
   birthDate: "1990-01-01",
   gender: Gender.MALE,
+  specialty: Specialty.UNDECIDED,
+  workStatus: WorkStatus.WAITING,
+  skills: [],
+  projects: [],
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockFindLastEmployeeCode.mockResolvedValue(null);
 });
 
 describe("createEmployee", () => {
-  it("正常に社員とユーザーを作成する", async () => {
-    const expected = { userId: 1, employeeId: 1 };
-    mockCreateEmployeeWithUser.mockResolvedValue(expected);
+  it("正常に社員を作成する（最新コード取得→Employee生成→永続化の順に呼ぶ）", async () => {
+    mockFindLastEmployeeCode.mockResolvedValue("EMP005");
+    mockInsertEmployee.mockResolvedValue({ employeeId: 1 });
 
     const result = await createEmployee(baseInput);
 
-    expect(mockCreateEmployeeWithUser).toHaveBeenCalledWith(baseInput);
-    expect(result).toEqual(expected);
+    expect(mockFindLastEmployeeCode).toHaveBeenCalledOnce();
+    expect(mockInsertEmployee).toHaveBeenCalledWith(
+      expect.any(Employee),
+      baseInput,
+    );
+    expect(mockInsertEmployee.mock.calls[0]![0].employeeCode).toBe("EMP006");
+    expect(result).toEqual({ code: "SUCCESS", employeeId: 1 });
   });
 
-  it("メールアドレス重複時にエラーを投げる", async () => {
-    mockCreateEmployeeWithUser.mockRejectedValue(
-      new Error("Unique constraint failed on the fields: (`email`)"),
-    );
+  it("メールアドレス重複時に結果値として返す", async () => {
+    mockInsertEmployee.mockRejectedValue(new DuplicateFieldError("email"));
 
-    await expect(createEmployee(baseInput)).rejects.toThrow(
-      "Unique constraint",
-    );
+    const result = await createEmployee(baseInput);
+
+    expect(result).toEqual({ code: "DUPLICATE_EMAIL" });
   });
 
-  it("フレームワーク情報を含めて登録できる", async () => {
-    const input = {
+  it("マイナンバー重複時に結果値として返す", async () => {
+    mockInsertEmployee.mockRejectedValue(
+      new DuplicateFieldError("my_number"),
+    );
+
+    const result = await createEmployee(baseInput);
+
+    expect(result).toEqual({ code: "DUPLICATE_MY_NUMBER" });
+  });
+
+  it("存在しないskillIdの場合、結果値として返す", async () => {
+    mockInsertEmployee.mockRejectedValue(new InvalidSkillIdError());
+
+    const result = await createEmployee(baseInput);
+
+    expect(result).toEqual({ code: "INVALID_SKILL_ID" });
+  });
+
+  it("案件履歴の日付が不正な場合、永続化を呼ばずに結果値を返す（Employee.createが事前に検出）", async () => {
+    const invalidInput = {
       ...baseInput,
-      studiedFrameworkIds: [1, 2],
-      availableFrameworkIds: [3],
+      projects: [
+        {
+          active: true,
+          projectName: "案件A",
+          factory: "現場A",
+          skills: [],
+          startDate: "2026-01-10",
+          endDate: "2026-01-01",
+          contracts: [],
+        },
+      ],
     };
 
-    const expected = { userId: 2, employeeId: 2 };
-    mockCreateEmployeeWithUser.mockResolvedValue(expected);
+    const result = await createEmployee(invalidInput as never);
 
-    const result = await createEmployee(input);
+    expect(result).toEqual({
+      code: "INVALID_DATE_RANGE",
+      message: "案件履歴の終了日は開始日以降である必要があります",
+    });
+    expect(mockInsertEmployee).not.toHaveBeenCalled();
+  });
 
-    expect(mockCreateEmployeeWithUser).toHaveBeenCalledWith(input);
-    expect(result).toEqual(expected);
+  it("社員コードの衝突時はリトライし、再取得した最新コードで採番し直して成功する", async () => {
+    mockFindLastEmployeeCode
+      .mockResolvedValueOnce("EMP005")
+      .mockResolvedValueOnce("EMP006");
+    mockInsertEmployee
+      .mockRejectedValueOnce(new DuplicateFieldError("employee_code"))
+      .mockResolvedValueOnce({ employeeId: 7 });
+
+    const result = await createEmployee(baseInput);
+
+    expect(mockFindLastEmployeeCode).toHaveBeenCalledTimes(2);
+    expect(mockInsertEmployee).toHaveBeenCalledTimes(2);
+    expect(mockInsertEmployee.mock.calls[0]![0].employeeCode).toBe("EMP006");
+    expect(mockInsertEmployee.mock.calls[1]![0].employeeCode).toBe("EMP007");
+    expect(result).toEqual({ code: "SUCCESS", employeeId: 7 });
+  });
+
+  it("社員コードの衝突が上限回数を超えたら諦めて結果値を返す", async () => {
+    mockInsertEmployee.mockRejectedValue(
+      new DuplicateFieldError("employee_code"),
+    );
+
+    const result = await createEmployee(baseInput);
+
+    expect(mockInsertEmployee).toHaveBeenCalledTimes(4);
+    expect(result).toEqual({ code: "DUPLICATE_EMPLOYEE_CODE" });
+  });
+
+  it("employee_code以外の重複はリトライせず即座に結果値を返す", async () => {
+    mockInsertEmployee.mockRejectedValue(new DuplicateFieldError("email"));
+
+    const result = await createEmployee(baseInput);
+
+    expect(mockInsertEmployee).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ code: "DUPLICATE_EMAIL" });
   });
 });
 
@@ -81,24 +165,159 @@ describe("updateEmployeeService", () => {
   const employeeId = 1;
   const updateData = { name: "Updated Name", phone: "09012345678" };
 
-  it("正常に社員情報を更新する", async () => {
+  it("正常に社員情報を更新する（前職日付が無ければマージ検証をスキップする）", async () => {
     mockUpdateEmployee.mockResolvedValue({ id: employeeId } as never);
 
-    await updateEmployeeService(employeeId, updateData);
+    const result = await updateEmployeeService(employeeId, updateData);
 
+    expect(mockFindPreviousCompanyDates).not.toHaveBeenCalled();
     expect(mockUpdateEmployee).toHaveBeenCalledWith(employeeId, updateData);
+    expect(result).toEqual({ code: "SUCCESS" });
   });
 
   it("更新データが空の場合でも正常に動作する", async () => {
     const emptyUpdateData = {};
     mockUpdateEmployee.mockResolvedValue({ id: employeeId } as never);
 
-    await updateEmployeeService(employeeId, emptyUpdateData);
+    const result = await updateEmployeeService(employeeId, emptyUpdateData);
 
     expect(mockUpdateEmployee).toHaveBeenCalledWith(
       employeeId,
       emptyUpdateData,
     );
+    expect(result).toEqual({ code: "SUCCESS" });
+  });
+
+  it("案件履歴の日付が不正な場合（updateEmployee内部で検出）、結果値に変換する", async () => {
+    mockUpdateEmployee.mockRejectedValue(
+      new InvalidDateRangeError("案件履歴の終了日は開始日以降である必要があります"),
+    );
+
+    const result = await updateEmployeeService(employeeId, updateData);
+
+    expect(result).toEqual({
+      code: "INVALID_DATE_RANGE",
+      message: "案件履歴の終了日は開始日以降である必要があります",
+    });
+  });
+
+  it("存在しない社員の場合、結果値として返す", async () => {
+    mockUpdateEmployee.mockRejectedValue(new EmployeeNotFoundError());
+
+    const result = await updateEmployeeService(employeeId, updateData);
+
+    expect(result).toEqual({ code: "NOT_FOUND" });
+  });
+
+  it("マイナンバー重複時に結果値として返す", async () => {
+    mockUpdateEmployee.mockRejectedValue(new DuplicateFieldError("my_number"));
+
+    const result = await updateEmployeeService(employeeId, updateData);
+
+    expect(result).toEqual({ code: "DUPLICATE_MY_NUMBER" });
+  });
+
+  it("存在しないskillIdの場合、結果値として返す", async () => {
+    mockUpdateEmployee.mockRejectedValue(new InvalidSkillIdError());
+
+    const result = await updateEmployeeService(employeeId, updateData);
+
+    expect(result).toEqual({ code: "INVALID_SKILL_ID" });
+  });
+
+  describe("前職日付のマージ検証", () => {
+    it("片方だけ送られてきた場合、保存済みの値とマージして検証する", async () => {
+      mockFindPreviousCompanyDates.mockResolvedValue({
+        previousCompany1StartDate: "2020-02-01",
+        previousCompany1EndDate: null,
+        previousCompany2StartDate: null,
+        previousCompany2EndDate: null,
+        previousCompany3StartDate: null,
+        previousCompany3EndDate: null,
+      });
+
+      const result = await updateEmployeeService(employeeId, {
+        previousCompany1EndDate: "2020-01-01",
+      });
+
+      expect(mockFindPreviousCompanyDates).toHaveBeenCalledWith(employeeId);
+      expect(result).toEqual({
+        code: "INVALID_DATE_RANGE",
+        message: "前職1社目の終了日は開始日以降である必要があります",
+      });
+      expect(mockUpdateEmployee).not.toHaveBeenCalled();
+    });
+
+    it("マージ結果が正しければ更新処理に進む", async () => {
+      mockFindPreviousCompanyDates.mockResolvedValue({
+        previousCompany1StartDate: "2020-01-01",
+        previousCompany1EndDate: null,
+        previousCompany2StartDate: null,
+        previousCompany2EndDate: null,
+        previousCompany3StartDate: null,
+        previousCompany3EndDate: null,
+      });
+      mockUpdateEmployee.mockResolvedValue({ id: employeeId } as never);
+
+      const result = await updateEmployeeService(employeeId, {
+        previousCompany1EndDate: "2020-12-31",
+      });
+
+      expect(mockUpdateEmployee).toHaveBeenCalled();
+      expect(result).toEqual({ code: "SUCCESS" });
+    });
+
+    it("対象社員が存在しない場合、NOT_FOUNDを返し更新処理を呼ばない", async () => {
+      mockFindPreviousCompanyDates.mockResolvedValue(null);
+
+      const result = await updateEmployeeService(employeeId, {
+        previousCompany1EndDate: "2020-01-01",
+      });
+
+      expect(result).toEqual({ code: "NOT_FOUND" });
+      expect(mockUpdateEmployee).not.toHaveBeenCalled();
+    });
+
+    it("開始日だけ送られてきた場合、保存済みの終了日とマージして検証する", async () => {
+      mockFindPreviousCompanyDates.mockResolvedValue({
+        previousCompany1StartDate: null,
+        previousCompany1EndDate: "2020-01-01",
+        previousCompany2StartDate: null,
+        previousCompany2EndDate: null,
+        previousCompany3StartDate: null,
+        previousCompany3EndDate: null,
+      });
+
+      const result = await updateEmployeeService(employeeId, {
+        previousCompany1StartDate: "2020-02-01",
+      });
+
+      expect(result).toEqual({
+        code: "INVALID_DATE_RANGE",
+        message: "前職1社目の終了日は開始日以降である必要があります",
+      });
+      expect(mockUpdateEmployee).not.toHaveBeenCalled();
+    });
+
+    it("保存済みの値が既に不正でも、両方とも新しい値で上書きされれば検証を通る", async () => {
+      mockFindPreviousCompanyDates.mockResolvedValue({
+        previousCompany1StartDate: "2020-02-01",
+        previousCompany1EndDate: "2020-01-01",
+        previousCompany2StartDate: null,
+        previousCompany2EndDate: null,
+        previousCompany3StartDate: null,
+        previousCompany3EndDate: null,
+      });
+      mockUpdateEmployee.mockResolvedValue({ id: employeeId } as never);
+
+      const result = await updateEmployeeService(employeeId, {
+        previousCompany1StartDate: "2021-01-01",
+        previousCompany1EndDate: "2021-12-31",
+      });
+
+      expect(mockUpdateEmployee).toHaveBeenCalled();
+      expect(result).toEqual({ code: "SUCCESS" });
+    });
   });
 });
 
@@ -108,7 +327,6 @@ describe("getEmployeeListService", () => {
       employeeId: 1,
       employeeCode: "EMP001",
       name: "John Doe",
-      frameworks: ["React"],
       contractPrice: 680000,
       status: EmployeeStatus.WORKING,
     },
@@ -116,7 +334,6 @@ describe("getEmployeeListService", () => {
       employeeId: 2,
       employeeCode: "EMP002",
       name: "Jane Smith",
-      frameworks: [],
       contractPrice: null,
       status: null,
     },
@@ -183,9 +400,10 @@ describe("getEmployeeDetailsService", () => {
     gender: Gender.MALE,
     phone: null,
     joinDate: null,
+    specialty: "UNDECIDED",
+    workStatus: "WAITING",
+    gitHub: null,
     trainingEndDate: null,
-    studiedFrameworks: [],
-    availableFrameworks: [],
     previousCompany1Name: null,
     previousCompany1StartDate: null,
     previousCompany1EndDate: null,
