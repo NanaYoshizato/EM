@@ -26,6 +26,14 @@ export const createEmployeeRoute = createRoute({
       content: { "application/json": { schema: ErrorSchema } },
       description: "バリデーションエラーまたはメールアドレス重複",
     },
+    401: {
+      content: { "application/json": { schema: ErrorSchema } },
+      description: "未ログイン、または通行証が無効",
+    },
+    403: {
+      content: { "application/json": { schema: ErrorSchema } },
+      description: "この操作を行う権限がない",
+    },
     500: {
       content: { "application/json": { schema: ErrorSchema } },
       description: "サーバーエラー",
@@ -50,6 +58,14 @@ export const updateEmployeeRoute = createRoute({
     400: {
       content: { "application/json": { schema: ErrorSchema } },
       description: "バリデーションエラー",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorSchema } },
+      description: "未ログイン、または通行証が無効",
+    },
+    403: {
+      content: { "application/json": { schema: ErrorSchema } },
+      description: "この操作を行う権限がない",
     },
     404: {
       content: { "application/json": { schema: ErrorSchema } },
@@ -80,6 +96,10 @@ export const getEmployeeListRoute = createRoute({
       },
       description: "社員一覧取得成功",
     },
+    401: {
+      content: { "application/json": { schema: ErrorSchema } },
+      description: "未ログイン、または通行証が無効",
+    },
     500: {
       content: { "application/json": { schema: ErrorSchema } },
       description: "サーバーエラー",
@@ -100,6 +120,10 @@ export const getEmployeeDetailsRoute = createRoute({
         "application/json": { schema: EmployeeDetailsSchema },
       },
       description: "社員詳細情報取得成功",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorSchema } },
+      description: "未ログイン、または通行証が無効",
     },
     404: {
       content: { "application/json": { schema: ErrorSchema } },

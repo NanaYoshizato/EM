@@ -391,7 +391,6 @@ export const getEmployeeDetails = async (employeeId: number) => {
 
 /** 社員テーブルのid, 社員番号, 氏名を取得する */
 export const findEmployeeSummaryByUserId = async (userId: number) => {
-  // 論理削除済みの社員は除く（findUniqueは一意な項目でしか絞り込めないためfindFirst）
   return await prisma.employee.findFirst({
     where: { userId, isDelete: false },
     select: { employeeCode: true, name: true },

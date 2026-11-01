@@ -1,10 +1,11 @@
+import { scopeOf, type Actor } from "@/constants/permissions";
 import {
   ConcurrentUpdateError,
   DuplicateFieldError,
   Employee,
   EmployeeError,
 } from "./domain/employee";
-import type { EmployeeRepository } from "./domain/types";
+import type { EmployeeRepository, NewEmployeeInput } from "./domain/types";
 import {
   getEmployeeList,
   getEmployeeDetails,
@@ -14,6 +15,7 @@ import type {
   CreateEmployeeInput,
   UpdateEmployeeInput,
 } from "./types/employee.schema";
+import { FIELD_GROUPS } from "./domain/fieldGroups";
 
 /** 同時実行の衝突（社員コードの採番・同じ社員の同時更新）時に、この回数までやり直す */
 const MAX_RETRIES = 3;
@@ -22,12 +24,16 @@ const MAX_RETRIES = 3;
 type ErrorResult = { code: EmployeeError["code"]; message: string };
 
 // 新規登録
-type CreateEmployeeResult = { code: "SUCCESS"; employeeId: number } | ErrorResult;
+type CreateEmployeeResult =
+  | { code: "SUCCESS"; employeeId: number }
+  | { code: "FORBIDDEN" }
+  | ErrorResult;
 
 // 更新
 type UpdateEmployeeResult =
   | { code: "SUCCESS" }
   | { code: "NOT_FOUND" }
+  | { code: "FORBIDDEN" }
   | ErrorResult;
 
 const toErrorResult = ({ code, message }: EmployeeError): ErrorResult => ({
@@ -36,12 +42,27 @@ const toErrorResult = ({ code, message }: EmployeeError): ErrorResult => ({
 });
 
 /**
+ * 書き込み権限があるかチェック
+ */
+const canWrite = (actor: Actor, data: object): boolean =>
+  Object.keys(data).every((field) => {
+    const group = FIELD_GROUPS[field as keyof NewEmployeeInput];
+
+    if (group === undefined) return false;
+    return scopeOf(actor.role, `employee.${group}.write`) === "all";
+  });
+
+/**
  * 社員登録の処理の流れ（今の最大の社員コードを読む→社員を作る→DBに保存）をここで組み立てる。
  */
 export const createEmployee = async (
   repository: EmployeeRepository,
+  actor: Actor,
   data: CreateEmployeeInput,
 ): Promise<CreateEmployeeResult> => {
+  if (scopeOf(actor.role, "employee.create") !== "all" || !canWrite(actor, data)) {
+    return { code: "FORBIDDEN" };
+  }
   for (let attempt = 0; ; attempt++) {
     try {
       // 1. 今いちばん大きい社員コードを取得する
@@ -75,9 +96,14 @@ export const createEmployee = async (
  */
 export const updateEmployee = async (
   repository: EmployeeRepository,
+  actor: Actor,
   employeeId: number,
   data: UpdateEmployeeInput,
 ): Promise<UpdateEmployeeResult> => {
+  if (!canWrite(actor, data)) {
+    return { code: "FORBIDDEN" };
+  }
+
   for (let attempt = 0; ; attempt++) {
     try {
       // 1. DBから社員を読み込む

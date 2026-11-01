@@ -140,3 +140,9 @@ export interface EmployeeRepository {
 	/** 保存済みの社員を更新する（読み込み後に他の更新が入っていたらConcurrentUpdateError。重複・スキルはinsertと同じ） */
 	update(employee: Employee): Promise<void>;
 }
+
+/**
+ * 社員情報の権限の区分
+ */
+export type FieldGroup = "basic" | "contact" | "projects" | "confidential";
+

@@ -14,6 +14,7 @@ vi.mock("../repository", () => ({
 import { getEmployeeList, getEmployeeDetails } from "../repository";
 
 import { Gender, EmployeeStatus, Specialty, WorkStatus } from "@prisma/client";
+import type { UpdateEmployeeInput } from "../types/employee.schema";
 import {
   ConcurrentUpdateError,
   DuplicateFieldError,
@@ -21,9 +22,17 @@ import {
   InvalidSkillIdError,
 } from "../domain/employee";
 import type { EmployeeRepository } from "../domain/types";
+import type { Actor } from "@/constants/permissions";
 
 const mockGetEmployeeList = vi.mocked(getEmployeeList);
 const mockGetEmployeeDetails = vi.mocked(getEmployeeDetails);
+
+/** 操作する人（既存のテストは、権限で止まらない管理者で行う） */
+const admin: Actor = { userId: 1, role: "admin" };
+const systemAdmin: Actor = { userId: 2, role: "system_admin" };
+const sales: Actor = { userId: 3, role: "sales" };
+const mentor: Actor = { userId: 4, role: "mentor" };
+const employee: Actor = { userId: 5, role: "employee" };
 
 /** テスト用のリポジトリ（ポートを満たす偽物） */
 const repository = {
@@ -63,6 +72,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   repository.findLastEmployeeCode.mockResolvedValue(null);
   repository.insert.mockResolvedValue(1);
+  // clearAllMocksは前のテストで設定した動き（mockRejectedValue等）を消さないので、毎回戻す
+  repository.update.mockResolvedValue(undefined);
 });
 
 describe("createEmployee", () => {
@@ -70,7 +81,7 @@ describe("createEmployee", () => {
     repository.findLastEmployeeCode.mockResolvedValue("EMP005");
     repository.insert.mockResolvedValue(6);
 
-    const result = await createEmployee(repository, baseInput);
+    const result = await createEmployee(repository, admin, baseInput);
 
     expect(result).toEqual({ code: "SUCCESS", employeeId: 6 });
     const saved = repository.insert.mock.calls[0]![0];
@@ -81,7 +92,7 @@ describe("createEmployee", () => {
   it("メールアドレス重複時に結果値として返す", async () => {
     repository.insert.mockRejectedValue(new DuplicateFieldError("email"));
 
-    const result = await createEmployee(repository, baseInput);
+    const result = await createEmployee(repository, admin, baseInput);
 
     expect(result).toEqual({
       code: "DUPLICATE_EMAIL",
@@ -92,7 +103,7 @@ describe("createEmployee", () => {
   it("マイナンバー重複時に結果値として返す", async () => {
     repository.insert.mockRejectedValue(new DuplicateFieldError("myNumber"));
 
-    const result = await createEmployee(repository, baseInput);
+    const result = await createEmployee(repository, admin, baseInput);
 
     expect(result).toEqual({
       code: "DUPLICATE_MY_NUMBER",
@@ -104,7 +115,7 @@ describe("createEmployee", () => {
   it("存在しないskillIdの場合、結果値として返す", async () => {
     repository.insert.mockRejectedValue(new InvalidSkillIdError());
 
-    const result = await createEmployee(repository, baseInput);
+    const result = await createEmployee(repository, admin, baseInput);
 
     expect(result).toEqual({
       code: "INVALID_SKILL_ID",
@@ -113,7 +124,7 @@ describe("createEmployee", () => {
   });
 
   it("スキルが重複している場合、DBに保存せずに結果値を返す", async () => {
-    const result = await createEmployee(repository, {
+    const result = await createEmployee(repository, admin, {
       ...baseInput,
       skills: [
         { skillId: 1, years: 1 },
@@ -129,7 +140,7 @@ describe("createEmployee", () => {
   });
 
   it("案件履歴の日付が不正な場合、DBに保存せずに結果値を返す", async () => {
-    const result = await createEmployee(repository, {
+    const result = await createEmployee(repository, admin, {
       ...baseInput,
       projects: [
         {
@@ -159,7 +170,7 @@ describe("createEmployee", () => {
       .mockRejectedValueOnce(new DuplicateFieldError("employeeCode"))
       .mockResolvedValueOnce(3);
 
-    const result = await createEmployee(repository, baseInput);
+    const result = await createEmployee(repository, admin, baseInput);
 
     expect(result).toEqual({ code: "SUCCESS", employeeId: 3 });
     expect(repository.insert.mock.calls[1]![0].employeeCode).toBe("EMP003");
@@ -168,7 +179,7 @@ describe("createEmployee", () => {
   it("社員コードの衝突が上限回数を超えたら諦めて結果値を返す", async () => {
     repository.insert.mockRejectedValue(new DuplicateFieldError("employeeCode"));
 
-    const result = await createEmployee(repository, baseInput);
+    const result = await createEmployee(repository, admin, baseInput);
 
     expect(result).toEqual({
       code: "DUPLICATE_EMPLOYEE_CODE",
@@ -180,7 +191,7 @@ describe("createEmployee", () => {
   it("想定外のエラーはそのまま投げる（controllerで500になる）", async () => {
     repository.findLastEmployeeCode.mockRejectedValue(new Error("DB接続エラー"));
 
-    await expect(createEmployee(repository, baseInput)).rejects.toThrow(
+    await expect(createEmployee(repository, admin, baseInput)).rejects.toThrow(
       "DB接続エラー",
     );
   });
@@ -192,7 +203,7 @@ describe("updateEmployee", () => {
   });
 
   it("DBから読み込む→変更→DBに保存する", async () => {
-    const result = await updateEmployee(repository, 1, { name: "山田花子" });
+    const result = await updateEmployee(repository, admin, 1, { name: "山田花子" });
 
     expect(result).toEqual({ code: "SUCCESS" });
     expect(repository.findById).toHaveBeenCalledWith(1);
@@ -205,7 +216,7 @@ describe("updateEmployee", () => {
       .mockRejectedValueOnce(new ConcurrentUpdateError())
       .mockResolvedValueOnce(undefined);
 
-    const result = await updateEmployee(repository, 1, { name: "山田花子" });
+    const result = await updateEmployee(repository, admin, 1, { name: "山田花子" });
 
     expect(result).toEqual({ code: "SUCCESS" });
     expect(repository.findById).toHaveBeenCalledTimes(2);
@@ -214,7 +225,7 @@ describe("updateEmployee", () => {
   it("やり直しても衝突が続く場合、上限回数で諦めてCONFLICTを返す", async () => {
     repository.update.mockRejectedValue(new ConcurrentUpdateError());
 
-    const result = await updateEmployee(repository, 1, { name: "山田花子" });
+    const result = await updateEmployee(repository, admin, 1, { name: "山田花子" });
 
     expect(result).toEqual({
       code: "CONFLICT",
@@ -229,7 +240,7 @@ describe("updateEmployee", () => {
       .mockResolvedValueOnce(null);
     repository.update.mockRejectedValueOnce(new ConcurrentUpdateError());
 
-    const result = await updateEmployee(repository, 1, { name: "山田花子" });
+    const result = await updateEmployee(repository, admin, 1, { name: "山田花子" });
 
     expect(result).toEqual({ code: "NOT_FOUND" });
   });
@@ -237,7 +248,7 @@ describe("updateEmployee", () => {
   it("存在しない社員の場合、NOT_FOUNDを返し更新しない", async () => {
     repository.findById.mockResolvedValue(null);
 
-    const result = await updateEmployee(repository, 999, { name: "山田花子" });
+    const result = await updateEmployee(repository, admin, 999, { name: "山田花子" });
 
     expect(result).toEqual({ code: "NOT_FOUND" });
     expect(repository.update).not.toHaveBeenCalled();
@@ -260,7 +271,7 @@ describe("updateEmployee", () => {
       }),
     );
 
-    const result = await updateEmployee(repository, 1, {
+    const result = await updateEmployee(repository, admin, 1, {
       previousCompany1EndDate: "2020-01-01",
     });
 
@@ -274,7 +285,7 @@ describe("updateEmployee", () => {
   it("マイナンバー重複時に結果値として返す", async () => {
     repository.update.mockRejectedValue(new DuplicateFieldError("myNumber"));
 
-    const result = await updateEmployee(repository, 1, {
+    const result = await updateEmployee(repository, admin, 1, {
       myNumber: "123456789012",
     });
 
@@ -287,7 +298,7 @@ describe("updateEmployee", () => {
   it("存在しないskillIdの場合、結果値として返す", async () => {
     repository.update.mockRejectedValue(new InvalidSkillIdError());
 
-    const result = await updateEmployee(repository, 1, {
+    const result = await updateEmployee(repository, admin, 1, {
       skills: [{ skillId: 999, years: 1 }],
     });
 
@@ -298,7 +309,7 @@ describe("updateEmployee", () => {
   });
 
   it("スキルが重複している場合、DBに保存せずに結果値を返す", async () => {
-    const result = await updateEmployee(repository, 1, {
+    const result = await updateEmployee(repository, admin, 1, {
       skills: [
         { skillId: 2, years: 1 },
         { skillId: 2, years: 2 },
@@ -309,6 +320,59 @@ describe("updateEmployee", () => {
       code: "DUPLICATE_SKILL",
       message: "スキルが重複して指定されています",
     });
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("createEmployee — 権限", () => {
+  it.each([
+    ["管理者（機密あり）", "SUCCESS", admin, { ...baseInput, myNumber: "123456789012" }],
+    ["システム管理者", "SUCCESS", systemAdmin, baseInput],
+    ["システム管理者（機密あり）", "FORBIDDEN", systemAdmin, { ...baseInput, myNumber: "123456789012" }],
+    ["営業", "FORBIDDEN", sales, baseInput],
+    ["メンター", "FORBIDDEN", mentor, baseInput],
+    ["一般社員", "FORBIDDEN", employee, baseInput],
+  ])("%s が登録すると %s", async (_, expected, actor, data) => {
+    const result = await createEmployee(repository, actor, data);
+
+    expect(result.code).toBe(expected);
+  });
+
+  it("権限が無い場合、DBを読む前に止める", async () => {
+    await createEmployee(repository, sales, baseInput);
+
+    expect(repository.findLastEmployeeCode).not.toHaveBeenCalled();
+    expect(repository.insert).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateEmployee — 権限", () => {
+  beforeEach(() => {
+    repository.findById.mockResolvedValue(storedEmployee());
+  });
+
+  it.each<[string, string, Actor, UpdateEmployeeInput]>([
+    ["管理者・機密", "SUCCESS", admin, { myNumber: "123456789012" }],
+    ["システム管理者・基本情報", "SUCCESS", systemAdmin, { name: "山田花子" }],
+    ["システム管理者・連絡先", "SUCCESS", systemAdmin, { postalCode: "1000001" }],
+    ["システム管理者・案件履歴", "SUCCESS", systemAdmin, { projects: [] }],
+    ["システム管理者・機密", "FORBIDDEN", systemAdmin, { myNumber: "123456789012" }],
+    ["システム管理者・基本情報と機密", "FORBIDDEN", systemAdmin, { name: "山田花子", myNumber: "123456789012" }],
+    ["営業・基本情報", "FORBIDDEN", sales, { name: "山田花子" }],
+    ["営業・案件履歴（要確認）", "FORBIDDEN", sales, { projects: [] }],
+    ["メンター・基本情報", "FORBIDDEN", mentor, { name: "山田花子" }],
+    ["一般社員・基本情報（要確認）", "FORBIDDEN", employee, { name: "山田花子" }],
+    ["一般社員・連絡先（要確認）", "FORBIDDEN", employee, { postalCode: "1000001" }],
+  ])("%s を更新すると %s", async (_, expected, actor, data) => {
+    const result = await updateEmployee(repository, actor, 1, data);
+
+    expect(result.code).toBe(expected);
+  });
+
+  it("権限が無い場合、DBを読む前に止める", async () => {
+    await updateEmployee(repository, systemAdmin, 1, { myNumber: "123456789012" });
+
+    expect(repository.findById).not.toHaveBeenCalled();
     expect(repository.update).not.toHaveBeenCalled();
   });
 });

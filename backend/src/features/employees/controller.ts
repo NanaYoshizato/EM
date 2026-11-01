@@ -19,11 +19,18 @@ export const createEmployeeController: RouteHandler<
   typeof createEmployeeRoute, AuthEnv
 > = async (c) => {
   const body = c.req.valid("json");
+  const user = c.get("user");
 
   try {
-    const result = await createEmployee(employeeRepository, body);
+    const result = await createEmployee(
+      employeeRepository,
+      { userId: user.id, role: user.roleName },
+      body);
     if (result.code === "SUCCESS") {
       return c.body(null, 201);
+    }
+    if (result.code === "FORBIDDEN") {
+      return c.json({ error: "この操作を行う権限がありません" }, 403);
     }
     // 登録の業務エラーはすべて400（文言はドメインのエラーが持つ）
     return c.json({ error: result.message }, 400);
@@ -39,11 +46,18 @@ export const updateEmployeeController: RouteHandler<
   const { id } = c.req.param();
   const employeeId = Number(id);
   const body = c.req.valid("json");
+  const user = c.get("user");
 
   try {
-    const result = await updateEmployee(employeeRepository, employeeId, body);
+    const result = await updateEmployee(
+      employeeRepository,
+      { userId: user.id, role: user.roleName },
+      employeeId, body);
     if (result.code === "SUCCESS") {
       return c.body(null, 200);
+    }
+    if (result.code === "FORBIDDEN") {
+      return c.json({ error: "この操作を行う権限がありません" }, 403);
     }
     if (result.code === "NOT_FOUND") {
       return c.json({ error: "社員が見つかりません" }, 404);

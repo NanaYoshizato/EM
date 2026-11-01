@@ -37,6 +37,10 @@ const mockUpdateEmployee = vi.mocked(updateEmployee);
 const mockGetEmployeeListService = vi.mocked(getEmployeeListService);
 const mockGetEmployeeDetailsService = vi.mocked(getEmployeeDetailsService);
 
+/** ミドルウェア（requireAuth）がリクエストに持たせるログインユーザー */
+const loginUser = { id: 1, roleName: "admin" };
+const loginActor = { userId: 1, role: "admin" };
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -52,12 +56,18 @@ describe("createEmployeeController", () => {
       },
       body: vi.fn().mockReturnValue(expectedResponse),
       json: vi.fn(),
+      get: vi.fn().mockReturnValue(loginUser),
     } as unknown as CreateCtx;
 
     const result = await createEmployeeController(c, vi.fn());
 
     expect(c.req.valid).toHaveBeenCalledWith("json");
-    expect(mockCreateEmployee).toHaveBeenCalledWith(employeeRepository, body);
+    expect(c.get).toHaveBeenCalledWith("user");
+    expect(mockCreateEmployee).toHaveBeenCalledWith(
+      employeeRepository,
+      loginActor,
+      body,
+    );
     expect(c.body).toHaveBeenCalledWith(null, 201);
     expect(result).toBe(expectedResponse);
   });
@@ -74,6 +84,7 @@ describe("createEmployeeController", () => {
       },
       body: vi.fn(),
       json: vi.fn().mockReturnValue({ status: 400 }),
+      get: vi.fn().mockReturnValue(loginUser),
     } as unknown as CreateCtx;
 
     const result = await createEmployeeController(c, vi.fn());
@@ -95,6 +106,7 @@ describe("createEmployeeController", () => {
       req: { valid: vi.fn().mockReturnValue(body) },
       body: vi.fn(),
       json: vi.fn().mockReturnValue({ status: 400 }),
+      get: vi.fn().mockReturnValue(loginUser),
     } as unknown as CreateCtx;
 
     await createEmployeeController(c, vi.fn());
@@ -115,6 +127,7 @@ describe("createEmployeeController", () => {
       req: { valid: vi.fn().mockReturnValue(body) },
       body: vi.fn(),
       json: vi.fn().mockReturnValue({ status: 400 }),
+      get: vi.fn().mockReturnValue(loginUser),
     } as unknown as CreateCtx;
 
     await createEmployeeController(c, vi.fn());
@@ -135,6 +148,7 @@ describe("createEmployeeController", () => {
       req: { valid: vi.fn().mockReturnValue(body) },
       body: vi.fn(),
       json: vi.fn().mockReturnValue({ status: 400 }),
+      get: vi.fn().mockReturnValue(loginUser),
     } as unknown as CreateCtx;
 
     await createEmployeeController(c, vi.fn());
@@ -143,6 +157,24 @@ describe("createEmployeeController", () => {
       { error: "スキルが重複して指定されています" },
       400,
     );
+  });
+
+  it("権限が無い場合は403を返す", async () => {
+    mockCreateEmployee.mockResolvedValue({ code: "FORBIDDEN" });
+    const c = {
+      req: { valid: vi.fn().mockReturnValue({ name: "Test" }) },
+      body: vi.fn(),
+      json: vi.fn().mockReturnValue({ status: 403 }),
+      get: vi.fn().mockReturnValue(loginUser),
+    } as unknown as CreateCtx;
+
+    const result = await createEmployeeController(c, vi.fn());
+
+    expect(c.json).toHaveBeenCalledWith(
+      { error: "この操作を行う権限がありません" },
+      403,
+    );
+    expect(result).toEqual({ status: 403 });
   });
 });
 
@@ -158,6 +190,7 @@ describe("updateEmployeeController", () => {
       },
       body: vi.fn().mockReturnValue(expectedResponse),
       json: vi.fn(),
+      get: vi.fn().mockReturnValue(loginUser),
     } as unknown as UpdateCtx;
 
     const result = await updateEmployeeController(c, vi.fn());
@@ -166,6 +199,7 @@ describe("updateEmployeeController", () => {
     expect(c.req.valid).toHaveBeenCalledWith("json");
     expect(mockUpdateEmployee).toHaveBeenCalledWith(
       employeeRepository,
+      loginActor,
       1,
       updateBody,
     );
@@ -186,6 +220,7 @@ describe("updateEmployeeController", () => {
       },
       body: vi.fn(),
       json: vi.fn().mockReturnValue({ status: 400 }),
+      get: vi.fn().mockReturnValue(loginUser),
     } as unknown as UpdateCtx;
 
     const result = await updateEmployeeController(c, vi.fn());
@@ -207,6 +242,7 @@ describe("updateEmployeeController", () => {
       },
       body: vi.fn(),
       json: vi.fn().mockReturnValue({ status: 404 }),
+      get: vi.fn().mockReturnValue(loginUser),
     } as unknown as UpdateCtx;
 
     const result = await updateEmployeeController(c, vi.fn());
@@ -227,6 +263,7 @@ describe("updateEmployeeController", () => {
       },
       body: vi.fn(),
       json: vi.fn().mockReturnValue({ status: 409 }),
+      get: vi.fn().mockReturnValue(loginUser),
     } as unknown as UpdateCtx;
 
     const result = await updateEmployeeController(c, vi.fn());
@@ -251,6 +288,7 @@ describe("updateEmployeeController", () => {
       },
       body: vi.fn(),
       json: vi.fn().mockReturnValue({ status: 400 }),
+      get: vi.fn().mockReturnValue(loginUser),
     } as unknown as UpdateCtx;
 
     await updateEmployeeController(c, vi.fn());
@@ -259,6 +297,27 @@ describe("updateEmployeeController", () => {
       { error: "マイナンバーが既に使用されています" },
       400,
     );
+  });
+
+  it("権限が無い場合は403を返す", async () => {
+    mockUpdateEmployee.mockResolvedValue({ code: "FORBIDDEN" });
+    const c = {
+      req: {
+        param: vi.fn().mockReturnValue({ id: 1 }),
+        valid: vi.fn().mockReturnValue({ myNumber: "123456789012" }),
+      },
+      body: vi.fn(),
+      json: vi.fn().mockReturnValue({ status: 403 }),
+      get: vi.fn().mockReturnValue(loginUser),
+    } as unknown as UpdateCtx;
+
+    const result = await updateEmployeeController(c, vi.fn());
+
+    expect(c.json).toHaveBeenCalledWith(
+      { error: "この操作を行う権限がありません" },
+      403,
+    );
+    expect(result).toEqual({ status: 403 });
   });
 });
 

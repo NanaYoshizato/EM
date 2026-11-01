@@ -517,7 +517,10 @@ export const updateEmployeeSchema = z.object({
     )
     .max(50)
     .optional(),
-});
+}).refine(
+  (data) => Object.keys(data).length > 0,
+  "更新する項目がありません",
+);
 
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
 
