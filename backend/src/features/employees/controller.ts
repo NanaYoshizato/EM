@@ -13,9 +13,10 @@ import type {
   getEmployeeListRoute,
   getEmployeeDetailsRoute,
 } from "./types/routes";
+import type { AuthEnv } from "@/middlewares/requireAuth";
 
 export const createEmployeeController: RouteHandler<
-  typeof createEmployeeRoute
+  typeof createEmployeeRoute, AuthEnv
 > = async (c) => {
   const body = c.req.valid("json");
 
@@ -33,7 +34,7 @@ export const createEmployeeController: RouteHandler<
 };
 
 export const updateEmployeeController: RouteHandler<
-  typeof updateEmployeeRoute
+  typeof updateEmployeeRoute, AuthEnv
 > = async (c) => {
   const { id } = c.req.param();
   const employeeId = Number(id);
@@ -59,7 +60,7 @@ export const updateEmployeeController: RouteHandler<
 };
 
 export const getEmployeeListController: RouteHandler<
-  typeof getEmployeeListRoute
+  typeof getEmployeeListRoute, AuthEnv
 > = async (c) => {
   const query = c.req.valid("query");
   const filters: { employeeCode?: string; name?: string } = {};
@@ -139,7 +140,7 @@ export const mapEmployeeDetailsResponse = (
 });
 
 export const getEmployeeDetailsController: RouteHandler<
-  typeof getEmployeeDetailsRoute
+  typeof getEmployeeDetailsRoute, AuthEnv
 > = async (c) => {
   const { id } = c.req.param();
   const employeeId = Number(id);

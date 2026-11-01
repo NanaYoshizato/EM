@@ -117,7 +117,7 @@ export const getEmployeeDetailsService = async (employeeId: number) => {
 /**
  * ユーザーidから社員情報を取得するサービス
  * @param userId
- * @returns 社員テーブルのid, 社員番号, 氏名
+ * @returns 社員番号, 氏名
  */
 export const getEmployeeSummaryByUserId = (userId: number) => {
   return findEmployeeSummaryByUserId(userId);

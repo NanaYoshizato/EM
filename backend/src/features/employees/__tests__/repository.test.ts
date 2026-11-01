@@ -16,6 +16,7 @@ import {
   employeeRepository,
   getEmployeeList,
   getEmployeeDetails,
+  findEmployeeSummaryByUserId,
 } from "../repository";
 import { prisma } from "@/lib/prisma";
 import { Gender, EmployeeStatus, Specialty, WorkStatus, Prisma } from "@prisma/client";
@@ -505,5 +506,22 @@ describe("getEmployeeDetails", () => {
     const result = await getEmployeeDetails(9999);
 
     expect(result).toBeNull();
+  });
+});
+
+describe("findEmployeeSummaryByUserId", () => {
+  it("論理削除済みを除いて、社員番号と氏名だけを取得する", async () => {
+    mockEmployeeFindFirst.mockResolvedValue({
+      employeeCode: "EMP005",
+      name: "山田太郎",
+    } as never);
+
+    const result = await findEmployeeSummaryByUserId(1);
+
+    expect(mockEmployeeFindFirst).toHaveBeenCalledWith({
+      where: { userId: 1, isDelete: false },
+      select: { employeeCode: true, name: true },
+    });
+    expect(result).toEqual({ employeeCode: "EMP005", name: "山田太郎" });
   });
 });
