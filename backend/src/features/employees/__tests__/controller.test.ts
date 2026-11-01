@@ -7,17 +7,18 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("../service", () => ({
   createEmployee: vi.fn(),
-  updateEmployeeService: vi.fn(),
+  updateEmployee: vi.fn(),
   getEmployeeListService: vi.fn(),
   getEmployeeDetailsService: vi.fn(),
 }));
 
 import {
   createEmployee,
-  updateEmployeeService,
+  updateEmployee,
   getEmployeeListService,
   getEmployeeDetailsService,
 } from "../service";
+import { employeeRepository } from "../repository";
 import {
   createEmployeeController,
   updateEmployeeController,
@@ -32,7 +33,7 @@ type ListCtx = Parameters<typeof getEmployeeListController>[0];
 type DetailsCtx = Parameters<typeof getEmployeeDetailsController>[0];
 
 const mockCreateEmployee = vi.mocked(createEmployee);
-const mockUpdateEmployeeService = vi.mocked(updateEmployeeService);
+const mockUpdateEmployee = vi.mocked(updateEmployee);
 const mockGetEmployeeListService = vi.mocked(getEmployeeListService);
 const mockGetEmployeeDetailsService = vi.mocked(getEmployeeDetailsService);
 
@@ -56,14 +57,17 @@ describe("createEmployeeController", () => {
     const result = await createEmployeeController(c, vi.fn());
 
     expect(c.req.valid).toHaveBeenCalledWith("json");
-    expect(mockCreateEmployee).toHaveBeenCalledWith(body);
+    expect(mockCreateEmployee).toHaveBeenCalledWith(employeeRepository, body);
     expect(c.body).toHaveBeenCalledWith(null, 201);
     expect(result).toBe(expectedResponse);
   });
 
   it("should return 400 when email is duplicate", async () => {
     const body = { email: "test@example.com", name: "Test" };
-    mockCreateEmployee.mockResolvedValue({ code: "DUPLICATE_EMAIL" });
+    mockCreateEmployee.mockResolvedValue({
+      code: "DUPLICATE_EMAIL",
+      message: "メールアドレスが既に使用されています",
+    });
     const c = {
       req: {
         valid: vi.fn().mockReturnValue(body),
@@ -83,7 +87,10 @@ describe("createEmployeeController", () => {
 
   it("should return 400 when myNumber is duplicate", async () => {
     const body = { email: "test@example.com", name: "Test" };
-    mockCreateEmployee.mockResolvedValue({ code: "DUPLICATE_MY_NUMBER" });
+    mockCreateEmployee.mockResolvedValue({
+      code: "DUPLICATE_MY_NUMBER",
+      message: "マイナンバーが既に使用されています",
+    });
     const c = {
       req: { valid: vi.fn().mockReturnValue(body) },
       body: vi.fn(),
@@ -100,7 +107,10 @@ describe("createEmployeeController", () => {
 
   it("should return 400 when skillId does not exist", async () => {
     const body = { email: "test@example.com", name: "Test" };
-    mockCreateEmployee.mockResolvedValue({ code: "INVALID_SKILL_ID" });
+    mockCreateEmployee.mockResolvedValue({
+      code: "INVALID_SKILL_ID",
+      message: "指定されたスキルが存在しません",
+    });
     const c = {
       req: { valid: vi.fn().mockReturnValue(body) },
       body: vi.fn(),
@@ -114,13 +124,33 @@ describe("createEmployeeController", () => {
       400,
     );
   });
+
+  it("スキルが重複している場合は400を返す", async () => {
+    const body = { email: "test@example.com", name: "Test" };
+    mockCreateEmployee.mockResolvedValue({
+      code: "DUPLICATE_SKILL",
+      message: "スキルが重複して指定されています",
+    });
+    const c = {
+      req: { valid: vi.fn().mockReturnValue(body) },
+      body: vi.fn(),
+      json: vi.fn().mockReturnValue({ status: 400 }),
+    } as unknown as CreateCtx;
+
+    await createEmployeeController(c, vi.fn());
+
+    expect(c.json).toHaveBeenCalledWith(
+      { error: "スキルが重複して指定されています" },
+      400,
+    );
+  });
 });
 
 describe("updateEmployeeController", () => {
   it("should return 200 with no body", async () => {
     const updateBody = { name: "Updated Name" };
     const expectedResponse = { status: 200 };
-    mockUpdateEmployeeService.mockResolvedValue({ code: "SUCCESS" });
+    mockUpdateEmployee.mockResolvedValue({ code: "SUCCESS" });
     const c = {
       req: {
         param: vi.fn().mockReturnValue({ id: 1 }),
@@ -134,14 +164,18 @@ describe("updateEmployeeController", () => {
 
     expect(c.req.param).toHaveBeenCalled();
     expect(c.req.valid).toHaveBeenCalledWith("json");
-    expect(mockUpdateEmployeeService).toHaveBeenCalledWith(1, updateBody);
+    expect(mockUpdateEmployee).toHaveBeenCalledWith(
+      employeeRepository,
+      1,
+      updateBody,
+    );
     expect(c.body).toHaveBeenCalledWith(null, 200);
     expect(result).toBe(expectedResponse);
   });
 
   it("案件履歴の日付が不正な場合は400を返す", async () => {
     const updateBody = { name: "Updated Name" };
-    mockUpdateEmployeeService.mockResolvedValue({
+    mockUpdateEmployee.mockResolvedValue({
       code: "INVALID_DATE_RANGE",
       message: "案件履歴の終了日は開始日以降である必要があります",
     });
@@ -165,7 +199,7 @@ describe("updateEmployeeController", () => {
 
   it("should return 404 when employee is not found", async () => {
     const updateBody = { name: "Updated Name" };
-    mockUpdateEmployeeService.mockResolvedValue({ code: "NOT_FOUND" });
+    mockUpdateEmployee.mockResolvedValue({ code: "NOT_FOUND" });
     const c = {
       req: {
         param: vi.fn().mockReturnValue({ id: 1 }),
@@ -181,10 +215,34 @@ describe("updateEmployeeController", () => {
     expect(result).toEqual({ status: 404 });
   });
 
+  it("同時更新の衝突が解消しなかった場合は409を返す", async () => {
+    mockUpdateEmployee.mockResolvedValue({
+      code: "CONFLICT",
+      message: "他の更新と競合しました。もう一度お試しください",
+    });
+    const c = {
+      req: {
+        param: vi.fn().mockReturnValue({ id: 1 }),
+        valid: vi.fn().mockReturnValue({ name: "Updated Name" }),
+      },
+      body: vi.fn(),
+      json: vi.fn().mockReturnValue({ status: 409 }),
+    } as unknown as UpdateCtx;
+
+    const result = await updateEmployeeController(c, vi.fn());
+
+    expect(c.json).toHaveBeenCalledWith(
+      { error: "他の更新と競合しました。もう一度お試しください" },
+      409,
+    );
+    expect(result).toEqual({ status: 409 });
+  });
+
   it("should return 400 when myNumber is duplicate", async () => {
     const updateBody = { myNumber: "123456789012" };
-    mockUpdateEmployeeService.mockResolvedValue({
+    mockUpdateEmployee.mockResolvedValue({
       code: "DUPLICATE_MY_NUMBER",
+      message: "マイナンバーが既に使用されています",
     });
     const c = {
       req: {

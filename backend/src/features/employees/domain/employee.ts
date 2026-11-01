@@ -3,56 +3,139 @@
  * 社員に関する業務ルールをここに集約する
  */
 
-export class InvalidDateRangeError extends Error {
+import type {
+	Contract,
+	EmployeeChanges,
+	EmployeeErrorCode,
+	EmployeeProfile,
+	EmployeeSkill,
+	EmployeeState,
+	FamilyField,
+	NewEmployeeInput,
+	PreviousCompanyDates,
+	ProjectHistoryInput,
+} from "./types";
+
+/**
+ * 社員の登録・更新で起きる業務エラーの共通の親
+ * code：serviceが返す結果コード、message：利用者に返す文言
+ */
+export abstract class EmployeeError extends Error {
+	abstract readonly code: EmployeeErrorCode;
+
 	constructor(message: string) {
 		super(message);
-		this.name = "InvalidDateRangeError";
+		this.name = new.target.name;
 	}
 }
 
-/** JSTは夏時間が無い固定UTC+9のため、ロケール依存無しで厳密に計算できる */
-const todayInJST = (): string =>
-	new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
+/** 開始日・終了日の前後が逆転している（ドメインが投げる） */
+export class InvalidDateRangeError extends EmployeeError {
+	readonly code = "INVALID_DATE_RANGE";
+}
+
+/** スキルIDが重複している（ドメインが投げる） */
+export class DuplicateSkillError extends EmployeeError {
+	readonly code = "DUPLICATE_SKILL";
+
+	constructor() {
+		super("スキルが重複して指定されています");
+	}
+}
+
+/** 存在しないスキルIDが指定された（リポジトリが投げる） */
+export class InvalidSkillIdError extends EmployeeError {
+	readonly code = "INVALID_SKILL_ID";
+
+	constructor() {
+		super("指定されたスキルが存在しません");
+	}
+}
+
+// 重複した項目ごとの結果コードと文言
+const DUPLICATE_FIELD_ERRORS = {
+	email: {
+		code: "DUPLICATE_EMAIL",
+		message: "メールアドレスが既に使用されています",
+	},
+	myNumber: {
+		code: "DUPLICATE_MY_NUMBER",
+		message: "マイナンバーが既に使用されています",
+	},
+	employeeCode: {
+		code: "DUPLICATE_EMPLOYEE_CODE",
+		message: "社員コードが重複しました。もう一度お試しください",
+	},
+} as const;
+
+type DuplicateField = keyof typeof DUPLICATE_FIELD_ERRORS;
+
+/** DBの「重複禁止」の制約に違反した（リポジトリが投げる） */
+export class DuplicateFieldError extends EmployeeError {
+	readonly code: (typeof DUPLICATE_FIELD_ERRORS)[DuplicateField]["code"];
+
+	constructor(readonly field: DuplicateField) {
+		super(DUPLICATE_FIELD_ERRORS[field].message);
+		this.code = DUPLICATE_FIELD_ERRORS[field].code;
+	}
+}
+
+/** 読み込んでから保存するまでの間に、他の更新・削除が入った（リポジトリが投げる） */
+export class ConcurrentUpdateError extends EmployeeError {
+	readonly code = "CONFLICT";
+
+	constructor() {
+		super("他の更新と競合しました。もう一度お試しください");
+	}
+}
+
+/** 社員コードの接頭辞（採番ルールとDBの検索条件の両方がこの値を使う） */
+export const EMPLOYEE_CODE_PREFIX = "EMP";
 
 /**
- * skillIdの重複を禁止する（配列全体に対するルールのため集約ルート/値
- * オブジェクトの生成処理から呼ばれる想定）。Zod側の`.refine()`で通常の
- * HTTPリクエストからは到達不能なので、専用のエラークラスは作らず素の
- * Errorを投げる（バリデーションを迂回した場合の防御なので500でよい）。
+ * skillIdの重複を禁止する。
  */
 const assertNoDuplicateSkillIds = (skillIds: ReadonlyArray<number>): void => {
 	if (new Set(skillIds).size !== skillIds.length) {
-		throw new Error("スキルが重複して指定されています");
+		throw new DuplicateSkillError();
 	}
 };
 
-type ProjectHistoryInput = {
-	active: boolean;
-	projectName: string;
-	factory: string;
-	skills: number[];
-	startDate: string;
-	endDate?: string | undefined;
-	contracts: ReadonlyArray<{
-		startDate: string;
-		unitPrice?: number | undefined;
-	}>;
+/** 開始日・終了日の前後関係をチェックする（endDate < startDateを禁止。同じ日は許容する） */
+const assertValidDateRange = (
+	startDate: string,
+	endDate: string,
+	label: string,
+): void => {
+	if (new Date(endDate) < new Date(startDate)) {
+		throw new InvalidDateRangeError(
+			`${label}の終了日は開始日以降である必要があります`,
+		);
+	}
 };
 
 /**
- * 案件履歴。
+ * 値がundefinedの項目を取り除く（PATCHで送られてこなかった項目で、保存済みの値を上書きしないため）
+ * 戻り値の型は「各項目を省略可能にし、undefinedを除いた型」
+ */
+const withoutUndefined = <T extends object>(
+	obj: T,
+): { [K in keyof T]?: Exclude<T[K], undefined> } =>
+	Object.fromEntries(
+		Object.entries(obj).filter(([, value]) => value !== undefined),
+	) as { [K in keyof T]?: Exclude<T[K], undefined> };
+
+/**
+ * 案件履歴（値オブジェクト）
  */
 export class ProjectHistory {
 	readonly active: boolean;
 	readonly projectName: string;
 	readonly factory: string;
-	readonly skillIds: number[];
+	readonly skillIds: ReadonlyArray<number>;
 	readonly startDate: string;
 	readonly endDate: string | undefined;
-	readonly contracts: ReadonlyArray<{
-		startDate: string;
-		unitPrice?: number | undefined;
-	}>;
+	readonly contracts: ReadonlyArray<Contract>;
 
 	private constructor(input: ProjectHistoryInput) {
 		this.active = input.active;
@@ -64,139 +147,188 @@ export class ProjectHistory {
 		this.contracts = input.contracts;
 	}
 
+	// 1.案件で使ったスキルの重複を禁止する
+	// 2.終了日があるとき、終了日が開始日より前ならInvalidDateRangeErrorを投げる。同じ日は許容する（<で判定）
 	static create(input: ProjectHistoryInput): ProjectHistory {
 		assertNoDuplicateSkillIds(input.skills);
 
 		if (input.endDate !== undefined) {
-			if (new Date(input.endDate) < new Date(input.startDate)) {
-				throw new InvalidDateRangeError(
-					"案件履歴の終了日は開始日以降である必要があります",
-				);
-			}
-			if (input.active && input.endDate < todayInJST()) {
-				throw new InvalidDateRangeError(
-					"稼働中の案件に、過去の参画終了日は設定できません",
-				);
-			}
+			assertValidDateRange(input.startDate, input.endDate, "案件履歴");
 		}
+		return new ProjectHistory(input);
+	}
+
+	/** DBから読み込んだ値で組み立てる（保存時にチェック済みなのでチェックしない。後からルールが増えても既存データを読み込めるように） */
+	static reconstruct(input: ProjectHistoryInput): ProjectHistory {
 		return new ProjectHistory(input);
 	}
 }
 
+// エラーメッセージに使う前職の呼び名
 const PREVIOUS_COMPANY_LABELS = ["前職1社目", "前職2社目", "前職3社目"] as const;
 
-type PreviousCompanyDates = {
-	previousCompany1StartDate?: string | undefined;
-	previousCompany1EndDate?: string | undefined;
-	previousCompany2StartDate?: string | undefined;
-	previousCompany2EndDate?: string | undefined;
-	previousCompany3StartDate?: string | undefined;
-	previousCompany3EndDate?: string | undefined;
-};
+// 有無をtrue/falseに変換するルール
+const toBoolean = (value: "有" | "無" | undefined): boolean | undefined =>
+	value === undefined ? undefined : value === "有";
+
+/**
+ * 外から受け取った基本情報を集約の形に変換する（POST/PATCH共通）
+ * 家族の有無の3項目だけ取り出してbooleanに変換し、残り（rest）はそのまま使う
+ */
+const toProfile = <T extends { [K in FamilyField]?: "有" | "無" | undefined }>({
+	hasSpouse,
+	hasChildren,
+	hasDependents,
+	...rest
+}: T) => ({
+	...rest,
+	hasSpouse: toBoolean(hasSpouse),
+	hasChildren: toBoolean(hasChildren),
+	hasDependents: toBoolean(hasDependents),
+});
 
 /**
  * 社員（Employee）集約
+ * 値を変えられるのはcreate/updateだけで、どちらも業務ルールをチェックしてから値を変える
  */
 export class Employee {
+	/** 未登録（create直後）はnull */
+	readonly id: number | null;
+	/** 読み込んだ時点の更新日時（保存時に「他の人が先に更新していないか」を確かめるのに使う。未登録はnull） */
+	readonly version: Date | null;
 	readonly employeeCode: string;
-	readonly hasSpouse: boolean | undefined;
-	readonly hasChildren: boolean | undefined;
-	readonly hasDependents: boolean | undefined;
-	readonly projectHistories: ProjectHistory[];
+	// 外から直接書き換えられないようprivateにし、下のgetterで読み取り専用として公開する
+	private _profile: EmployeeProfile;
+	private _skills: ReadonlyArray<EmployeeSkill>;
+	private _projectHistories: ReadonlyArray<ProjectHistory>;
+	// DBから読み込んだ直後は「差し替えていない」から始まる
+	private _skillsReplaced = false; //今回スキルを変更したか
+	private _projectHistoriesReplaced = false; // 今回案件履歴を変更したか
 
-	private constructor(input: {
-		employeeCode: string;
-		hasSpouse: boolean | undefined;
-		hasChildren: boolean | undefined;
-		hasDependents: boolean | undefined;
-		projectHistories: ProjectHistory[];
-	}) {
-		this.employeeCode = input.employeeCode;
-		this.hasSpouse = input.hasSpouse;
-		this.hasChildren = input.hasChildren;
-		this.hasDependents = input.hasDependents;
-		this.projectHistories = input.projectHistories;
+	// 外からnewできない。必ずcreate（新規）かreconstruct（DBから読み込み）を通る
+	private constructor(state: EmployeeState) {
+		this.id = state.id;
+		this.version = state.version;
+		this.employeeCode = state.employeeCode;
+		this._profile = state.profile;
+		this._skills = state.skills;
+		this._projectHistories = state.projectHistories;
+	}
+
+	get profile(): Readonly<EmployeeProfile> {
+		return this._profile;
+	}
+
+	get skills(): ReadonlyArray<EmployeeSkill> {
+		return this._skills;
+	}
+
+	get projectHistories(): ReadonlyArray<ProjectHistory> {
+		return this._projectHistories;
+	}
+
+	/** updateでスキル一覧を差し替えたか（保存時に子テーブルを作り直すかの判断に使う） */
+	get skillsReplaced(): boolean {
+		return this._skillsReplaced;
+	}
+
+	/** updateで案件履歴を差し替えたか（保存時に子テーブルを作り直すかの判断に使う） */
+	get projectHistoriesReplaced(): boolean {
+		return this._projectHistoriesReplaced;
 	}
 
 	/**
-	 * 新規社員を生成する（社員コード採番・案件履歴/前職日付/スキル重複の
-	 * 検証を内部で行う）。
+	 * 新しい社員を作る（社員コードを決め、業務ルールをチェックする）。
 	 * @param lastCode 採番時点での既存社員コードの最大値（存在しなければnull）
 	 */
-	static create(
-		data: PreviousCompanyDates & {
-			skills: ReadonlyArray<{ skillId: number; years: number }>;
-			projects: ReadonlyArray<ProjectHistoryInput>;
-			hasSpouse?: "有" | "無" | undefined;
-			hasChildren?: "有" | "無" | undefined;
-			hasDependents?: "有" | "無" | undefined;
-		},
-		lastCode: string | null,
-	): Employee {
-		assertNoDuplicateSkillIds(data.skills.map((skill) => skill.skillId));
+	static create(input: NewEmployeeInput, lastCode: string | null): Employee {
+		// スキル・案件履歴と、それ以外（基本情報）に分ける
+		const { skills, projects, ...rest } = input;
 
-		const projectHistories = data.projects.map((project) =>
-			ProjectHistory.create(project),
-		);
+		// 業務ルールをチェックする（違反していればエラーになり、社員は作られない）
+		const profile: EmployeeProfile = toProfile(rest);
+		Employee.assertValidPreviousCompanyDates(profile);
+		assertNoDuplicateSkillIds(skills.map((skill) => skill.skillId));
 
-		Employee.assertValidPreviousCompanyDates(data);
-
+		// 未登録なのでidとversionはnull。案件履歴はProjectHistory.createの中でチェックされる
 		return new Employee({
+			id: null,
+			version: null,
 			employeeCode: Employee.nextEmployeeCode(lastCode),
-			hasSpouse:
-				data.hasSpouse !== undefined
-					? Employee.toBoolean(data.hasSpouse)
-					: undefined,
-			hasChildren:
-				data.hasChildren !== undefined
-					? Employee.toBoolean(data.hasChildren)
-					: undefined,
-			hasDependents:
-				data.hasDependents !== undefined
-					? Employee.toBoolean(data.hasDependents)
-					: undefined,
-			projectHistories,
+			profile,
+			skills,
+			projectHistories: projects.map((project) => ProjectHistory.create(project)),
 		});
 	}
 
-	/** 社員コードの採番ルール（既存の最大コードの次の番号をEMP+3桁以上の数字で生成） */
-	static nextEmployeeCode(lastCode: string | null): string {
-		if (lastCode === null) return "EMP001";
+	/** DBから読み込んだ値で組み立てる（保存済みのデータはチェックしない） */
+	static reconstruct(state: {
+		id: number;
+		version: Date;
+		employeeCode: string;
+		profile: EmployeeProfile;
+		skills: ReadonlyArray<EmployeeSkill>;
+		projectHistories: ReadonlyArray<ProjectHistoryInput>;
+	}): Employee {
+		// 案件履歴だけは、チェックしないreconstructでProjectHistoryに変換する
+		return new Employee({
+			...state,
+			projectHistories: state.projectHistories.map((history) =>
+				ProjectHistory.reconstruct(history),
+			),
+		});
+	}
 
-		const match = /^EMP(\d+)$/.exec(lastCode);
+	/**
+	 * 送られてきた項目だけを変更する。前職の日付は保存済みの値と合わせた結果でチェックする。
+	 * チェックがすべて通ってから値を変える（途中で失敗しても中途半端に書き換わらないように）。
+	 */
+	update(changes: EmployeeChanges): void {
+		const { skills, projects, ...rest } = changes;
+
+		// 1. 変更後の基本情報を組み立てる（保存済みの値に、送られてきた項目だけを上書きする）
+		const profile: EmployeeProfile = {
+			...this._profile,
+			...withoutUndefined(toProfile(rest)),
+		};
+		// 2. チェックする（ここでエラーになれば、値は何も変わらない）
+		Employee.assertValidPreviousCompanyDates(profile);
+		if (skills !== undefined) {
+			assertNoDuplicateSkillIds(skills.map((skill) => skill.skillId));
+		}
+		const projectHistories = projects?.map((project) =>
+			ProjectHistory.create(project),
+		);
+
+		// 3. チェックが通ったので値を変える。スキル・案件履歴は送られてきたときだけ差し替える
+		this._profile = profile;
+		if (skills !== undefined) {
+			this._skills = skills;
+			this._skillsReplaced = true;
+		}
+		if (projectHistories !== undefined) {
+			this._projectHistories = projectHistories;
+			this._projectHistoriesReplaced = true;
+		}
+	}
+
+	/** 社員コードの採番ルール（既存の最大コードの次の番号を接頭辞+3桁以上の数字で生成） */
+	static nextEmployeeCode(lastCode: string | null): string {
+		if (lastCode === null) return `${EMPLOYEE_CODE_PREFIX}001`;
+
+		// 接頭辞の後ろの数字部分を取り出す（例："EMP005" → "005"）
+		const match = new RegExp(`^${EMPLOYEE_CODE_PREFIX}(\\d+)$`).exec(lastCode);
 		if (!match) {
 			throw new Error(`不正な社員コード形式です: ${lastCode}`);
 		}
 
 		const nextNumber = Number(match[1]) + 1;
-		return `EMP${String(nextNumber).padStart(3, "0")}`;
+		return `${EMPLOYEE_CODE_PREFIX}${String(nextNumber).padStart(3, "0")}`;
 	}
 
-	// 有無をtrue/falseに変換するルール
-	static toBoolean(value: "有" | "無"): boolean {
-		return value === "有";
-	}
-
-	/** skillIdの重複を禁止する（社員・案件履歴どちらのスキル一覧でも使う） */
-	static assertNoDuplicateSkillIds(skillIds: ReadonlyArray<number>): void {
-		assertNoDuplicateSkillIds(skillIds);
-	}
-
-	/** 開始日・終了日の前後関係を検証する汎用ルール（endDate < startDateを禁止） */
-	static assertValidDateRange(
-		startDate: string,
-		endDate: string,
-		label: string,
-	): void {
-		if (new Date(endDate) < new Date(startDate)) {
-			throw new InvalidDateRangeError(
-				`${label}の終了日は開始日以降である必要があります`,
-			);
-		}
-	}
-
-	/** 前職1〜3社目それぞれの開始日・終了日の前後関係を検証する（部分入力可） */
+	/** 前職1〜3社目それぞれの開始日・終了日の前後関係をチェックする（部分入力可） */
 	static assertValidPreviousCompanyDates(data: PreviousCompanyDates): void {
+		// [開始日, 終了日]の組を3社分並べ、両方入力されている組だけチェックする
 		const pairs = [
 			[data.previousCompany1StartDate, data.previousCompany1EndDate],
 			[data.previousCompany2StartDate, data.previousCompany2EndDate],
@@ -205,7 +337,7 @@ export class Employee {
 
 		pairs.forEach(([start, end], index) => {
 			if (start !== undefined && end !== undefined) {
-				Employee.assertValidDateRange(start, end, PREVIOUS_COMPANY_LABELS[index]!);
+				assertValidDateRange(start, end, PREVIOUS_COMPANY_LABELS[index]!);
 			}
 		});
 	}

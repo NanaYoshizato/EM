@@ -2,10 +2,11 @@ import type { RouteHandler } from "@hono/zod-openapi";
 import type { Prisma } from "@prisma/client";
 import {
   createEmployee,
-  updateEmployeeService,
+  updateEmployee,
   getEmployeeListService,
   getEmployeeDetailsService,
 } from "./service";
+import { employeeRepository } from "./repository";
 import type {
   createEmployeeRoute,
   updateEmployeeRoute,
@@ -19,25 +20,12 @@ export const createEmployeeController: RouteHandler<
   const body = c.req.valid("json");
 
   try {
-    const result = await createEmployee(body);
+    const result = await createEmployee(employeeRepository, body);
     if (result.code === "SUCCESS") {
       return c.body(null, 201);
     }
-    switch (result.code) {
-      case "DUPLICATE_EMAIL":
-        return c.json({ error: "メールアドレスが既に使用されています" }, 400);
-      case "DUPLICATE_MY_NUMBER":
-        return c.json({ error: "マイナンバーが既に使用されています" }, 400);
-      case "DUPLICATE_EMPLOYEE_CODE":
-        return c.json(
-          { error: "社員コードが重複しました。もう一度お試しください" },
-          400,
-        );
-      case "INVALID_SKILL_ID":
-        return c.json({ error: "指定されたスキルが存在しません" }, 400);
-      case "INVALID_DATE_RANGE":
-        return c.json({ error: result.message }, 400);
-    }
+    // 登録の業務エラーはすべて400（文言はドメインのエラーが持つ）
+    return c.json({ error: result.message }, 400);
   } catch (error: unknown) {
     console.error(error);
     return c.json({ error: "サーバーエラーが発生しました" }, 500);
@@ -52,20 +40,18 @@ export const updateEmployeeController: RouteHandler<
   const body = c.req.valid("json");
 
   try {
-    const result = await updateEmployeeService(employeeId, body);
+    const result = await updateEmployee(employeeRepository, employeeId, body);
     if (result.code === "SUCCESS") {
       return c.body(null, 200);
     }
-    switch (result.code) {
-      case "NOT_FOUND":
-        return c.json({ error: "社員が見つかりません" }, 404);
-      case "DUPLICATE_MY_NUMBER":
-        return c.json({ error: "マイナンバーが既に使用されています" }, 400);
-      case "INVALID_SKILL_ID":
-        return c.json({ error: "指定されたスキルが存在しません" }, 400);
-      case "INVALID_DATE_RANGE":
-        return c.json({ error: result.message }, 400);
+    if (result.code === "NOT_FOUND") {
+      return c.json({ error: "社員が見つかりません" }, 404);
     }
+    // 同時更新の衝突が、やり直しても解消しなかった
+    if (result.code === "CONFLICT") {
+      return c.json({ error: result.message }, 409);
+    }
+    return c.json({ error: result.message }, 400);
   } catch (error: unknown) {
     console.error(error);
     return c.json({ error: "サーバーエラーが発生しました" }, 500);

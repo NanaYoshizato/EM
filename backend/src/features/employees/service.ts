@@ -1,152 +1,105 @@
-import { Employee, InvalidDateRangeError } from "./domain/employee";
 import {
-  findLastEmployeeCode,
-  insertEmployee,
-  updateEmployee,
-  findPreviousCompanyDates,
+  ConcurrentUpdateError,
+  DuplicateFieldError,
+  Employee,
+  EmployeeError,
+} from "./domain/employee";
+import type { EmployeeRepository } from "./domain/types";
+import {
   getEmployeeList,
   getEmployeeDetails,
   findEmployeeSummaryByUserId,
 } from "./repository";
-import {
-  DuplicateFieldError,
-  EmployeeNotFoundError,
-  InvalidSkillIdError,
-} from "./errors";
 import type {
   CreateEmployeeInput,
   UpdateEmployeeInput,
 } from "./types/employee.schema";
 
-/** 社員コードの同時採番衝突（P2002）時に、この回数まで採番からやり直す */
-const MAX_EMPLOYEE_CODE_RETRIES = 3;
+/** 同時実行の衝突（社員コードの採番・同じ社員の同時更新）時に、この回数までやり直す */
+const MAX_RETRIES = 3;
 
-type CreateEmployeeResult =
-  | { code: "SUCCESS"; employeeId: number }
-  | { code: "DUPLICATE_EMAIL" }
-  | { code: "DUPLICATE_MY_NUMBER" }
-  | { code: "DUPLICATE_EMPLOYEE_CODE" }
-  | { code: "INVALID_SKILL_ID" }
-  | { code: "INVALID_DATE_RANGE"; message: string };
+/** 業務エラーの結果（文言はドメインのエラーが持つ） */
+type ErrorResult = { code: EmployeeError["code"]; message: string };
+
+// 新規登録
+type CreateEmployeeResult = { code: "SUCCESS"; employeeId: number } | ErrorResult;
+
+// 更新
+type UpdateEmployeeResult =
+  | { code: "SUCCESS" }
+  | { code: "NOT_FOUND" }
+  | ErrorResult;
+
+const toErrorResult = ({ code, message }: EmployeeError): ErrorResult => ({
+  code,
+  message,
+});
 
 /**
- * 社員登録のユースケース手順（最新の社員コード取得→Employee集約の生成→
- * 永続化）をここで組み立てる。repository.tsはDBアクセスのみを担当する。
+ * 社員登録の処理の流れ（今の最大の社員コードを読む→社員を作る→DBに保存）をここで組み立てる。
  */
 export const createEmployee = async (
+  repository: EmployeeRepository,
   data: CreateEmployeeInput,
 ): Promise<CreateEmployeeResult> => {
   for (let attempt = 0; ; attempt++) {
     try {
-      const lastCode = await findLastEmployeeCode();
+      // 1. 今いちばん大きい社員コードを取得する
+      const lastCode = await repository.findLastEmployeeCode();
+      // 2. 社員を作る（次の社員コードを決め、業務ルールをチェックする）
       const employee = Employee.create(data, lastCode);
-      const { employeeId } = await insertEmployee(employee, data);
+      // 3. 保存する
+      const employeeId = await repository.insert(employee);
       return { code: "SUCCESS", employeeId };
     } catch (error: unknown) {
-      if (error instanceof InvalidDateRangeError) {
-        return { code: "INVALID_DATE_RANGE", message: error.message };
+      // 同時登録で社員コードが衝突した場合は、採番からやり直す
+      if (
+        error instanceof DuplicateFieldError &&
+        error.field === "employeeCode" &&
+        attempt < MAX_RETRIES
+      ) {
+        continue;
       }
-      if (error instanceof InvalidSkillIdError) {
-        return { code: "INVALID_SKILL_ID" };
+      if (error instanceof EmployeeError) {
+        return toErrorResult(error);
       }
-      if (error instanceof DuplicateFieldError) {
-        if (
-          error.field.includes("employee_code") &&
-          attempt < MAX_EMPLOYEE_CODE_RETRIES
-        ) {
-          continue;
-        }
-        if (error.field.includes("email")) return { code: "DUPLICATE_EMAIL" };
-        if (error.field.includes("my_number"))
-          return { code: "DUPLICATE_MY_NUMBER" };
-        if (error.field.includes("employee_code"))
-          return { code: "DUPLICATE_EMPLOYEE_CODE" };
-      }
+      // 想定外のエラー（DB接続エラーなど）はcontrollerで500になる
       throw error;
     }
   }
 };
 
-type UpdateEmployeeResult =
-  | { code: "SUCCESS" }
-  | { code: "NOT_FOUND" }
-  | { code: "DUPLICATE_MY_NUMBER" }
-  | { code: "INVALID_SKILL_ID" }
-  | { code: "INVALID_DATE_RANGE"; message: string };
-
-const hasPreviousCompanyDateField = (data: UpdateEmployeeInput): boolean =>
-  data.previousCompany1StartDate !== undefined ||
-  data.previousCompany1EndDate !== undefined ||
-  data.previousCompany2StartDate !== undefined ||
-  data.previousCompany2EndDate !== undefined ||
-  data.previousCompany3StartDate !== undefined ||
-  data.previousCompany3EndDate !== undefined;
-
-export const updateEmployeeService = async (
+/**
+ * 社員更新の処理の流れ（DBから社員を読み込む→変更する→DBに保存）をここで組み立てる。
+ * 読み込み後に他の更新が入っていたら、最新の内容を読み込み直してやり直す。
+ */
+export const updateEmployee = async (
+  repository: EmployeeRepository,
   employeeId: number,
   data: UpdateEmployeeInput,
 ): Promise<UpdateEmployeeResult> => {
-  // PATCHは一部のフィールドしか送らないため、保存済みの値とマージしてから
-  // 検証する（送られてきた分だけを見ると、逆転した組み合わせを見逃す）
-  if (hasPreviousCompanyDateField(data)) {
-    const stored = await findPreviousCompanyDates(employeeId);
-    if (!stored) {
-      return { code: "NOT_FOUND" };
-    }
-
+  for (let attempt = 0; ; attempt++) {
     try {
-      Employee.assertValidPreviousCompanyDates({
-        previousCompany1StartDate:
-          data.previousCompany1StartDate ??
-          stored.previousCompany1StartDate ??
-          undefined,
-        previousCompany1EndDate:
-          data.previousCompany1EndDate ??
-          stored.previousCompany1EndDate ??
-          undefined,
-        previousCompany2StartDate:
-          data.previousCompany2StartDate ??
-          stored.previousCompany2StartDate ??
-          undefined,
-        previousCompany2EndDate:
-          data.previousCompany2EndDate ??
-          stored.previousCompany2EndDate ??
-          undefined,
-        previousCompany3StartDate:
-          data.previousCompany3StartDate ??
-          stored.previousCompany3StartDate ??
-          undefined,
-        previousCompany3EndDate:
-          data.previousCompany3EndDate ??
-          stored.previousCompany3EndDate ??
-          undefined,
-      });
+      // 1. DBから社員を読み込む
+      const employee = await repository.findById(employeeId);
+      if (!employee) {
+        return { code: "NOT_FOUND" };
+      }
+      // 2. 送られてきた項目を変更する（業務ルールのチェックも行う）
+      employee.update(data);
+      // 3. 保存する
+      await repository.update(employee);
+      return { code: "SUCCESS" };
     } catch (error: unknown) {
-      if (error instanceof InvalidDateRangeError) {
-        return { code: "INVALID_DATE_RANGE", message: error.message };
+      // 読み込み後に他の更新が入った場合は、最新の内容を読み込み直してやり直す
+      if (error instanceof ConcurrentUpdateError && attempt < MAX_RETRIES) {
+        continue;
+      }
+      if (error instanceof EmployeeError) {
+        return toErrorResult(error);
       }
       throw error;
     }
-  }
-
-  try {
-    await updateEmployee(employeeId, data);
-    return { code: "SUCCESS" };
-  } catch (error: unknown) {
-    if (error instanceof InvalidDateRangeError) {
-      return { code: "INVALID_DATE_RANGE", message: error.message };
-    }
-    if (error instanceof EmployeeNotFoundError) {
-      return { code: "NOT_FOUND" };
-    }
-    if (error instanceof InvalidSkillIdError) {
-      return { code: "INVALID_SKILL_ID" };
-    }
-    if (error instanceof DuplicateFieldError) {
-      if (error.field.includes("my_number"))
-        return { code: "DUPLICATE_MY_NUMBER" };
-    }
-    throw error;
   }
 };
 

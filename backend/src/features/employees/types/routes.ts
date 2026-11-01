@@ -55,6 +55,10 @@ export const updateEmployeeRoute = createRoute({
       content: { "application/json": { schema: ErrorSchema } },
       description: "社員が見つかりません",
     },
+    409: {
+      content: { "application/json": { schema: ErrorSchema } },
+      description: "他の更新と競合した（自動でやり直しても解消しなかった）",
+    },
     500: {
       content: { "application/json": { schema: ErrorSchema } },
       description: "サーバーエラー",

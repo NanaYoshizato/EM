@@ -1,37 +1,54 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import type {
-  CreateEmployeeInput,
-  UpdateEmployeeInput,
-} from "./types/employee.schema";
-import { Employee, ProjectHistory } from "./domain/employee";
 import {
+  ConcurrentUpdateError,
   DuplicateFieldError,
-  EmployeeNotFoundError,
+  Employee,
+  EMPLOYEE_CODE_PREFIX,
   InvalidSkillIdError,
-} from "./errors";
+  type ProjectHistory,
+} from "./domain/employee";
+import type { EmployeeRepository, EmployeeSkill } from "./domain/types";
 
-const toDuplicateFieldError = (error: unknown): DuplicateFieldError | null => {
+/** 重複禁止の制約がかかったカラム名 → ドメインの項目名 */
+const DUPLICATE_FIELDS = {
+  email: "email",
+  my_number: "myNumber",
+  employee_code: "employeeCode",
+} as const;
+
+/** 重複禁止の制約違反（P2002）をDuplicateFieldErrorに変換する。それ以外のエラーはそのまま返す */
+const toDomainError = (error: unknown): unknown => {
   if (
     error instanceof Prisma.PrismaClientKnownRequestError &&
     error.code === "P2002"
   ) {
+    // meta.targetには違反したカラム名の配列が入る（例：["my_number"]）
     const target = error.meta?.target;
-    const field = Array.isArray(target) ? String(target[0]) : String(target);
-    return new DuplicateFieldError(field);
+    const column = String(Array.isArray(target) ? target[0] : target);
+    // 想定しているカラムだけ変換する（hasOwnはtoStringなどの継承したキーを含めない）
+    if (Object.hasOwn(DUPLICATE_FIELDS, column)) {
+      return new DuplicateFieldError(
+        DUPLICATE_FIELDS[column as keyof typeof DUPLICATE_FIELDS],
+      );
+    }
   }
-  return null;
+  return error;
 };
 
-const collectSkillIds = (data: CreateEmployeeInput | UpdateEmployeeInput) => {
-  const ids = new Set<number>();
-  data.skills?.forEach((skill) => ids.add(skill.skillId));
-  data.projects?.forEach((project) =>
-    project.skills.forEach((skillId) => ids.add(skillId)),
+/** 社員スキルと案件で使ったスキルのIDを、重複なしで集める */
+const collectSkillIds = (
+  skills: ReadonlyArray<EmployeeSkill>,
+  projectHistories: ReadonlyArray<ProjectHistory>,
+) => {
+  const ids = new Set(skills.map((skill) => skill.skillId));
+  projectHistories.forEach((history) =>
+    history.skillIds.forEach((skillId) => ids.add(skillId)),
   );
   return Array.from(ids);
 };
 
+/** 指定されたスキルIDがすべてskillテーブルにあるか確認する（1つでも無ければInvalidSkillIdError） */
 const assertSkillIdsExist = async (
   tx: Prisma.TransactionClient,
   skillIds: number[],
@@ -46,385 +63,270 @@ const assertSkillIdsExist = async (
   }
 };
 
+/** "YYYY-MM-DD" → Date（値が無ければnull） */
+const toDate = (value: string | undefined) =>
+  value === undefined ? null : new Date(value);
+
+/** Date → "YYYY-MM-DD" */
+const toDateString = (date: Date) => date.toISOString().slice(0, 10);
+
+/** Date | null → "YYYY-MM-DD" | undefined（DBのnullはドメインではundefinedで表す） */
+const toOptionalDateString = (date: Date | null) =>
+  date ? toDateString(date) : undefined;
+
+/** 集約の基本情報をemployeeテーブルのカラムに変換する（値の無い項目はnullで保存する） */
+const toEmployeeColumns = ({ profile }: Employee) => ({
+  name: profile.name,
+  furigana: profile.furigana ?? null,
+  email: profile.email ?? null,
+  birthDate: toDate(profile.birthDate),
+  gender: profile.gender ?? null,
+  phone: profile.phone ?? null,
+  joinDate: toDate(profile.joinDate),
+  specialty: profile.specialty,
+  workStatus: profile.workStatus,
+  gitHub: profile.gitHub ?? null,
+  trainingEndDate: toDate(profile.trainingEndDate),
+  previousCompany1Name: profile.previousCompany1Name ?? null,
+  previousCompany1StartDate: toDate(profile.previousCompany1StartDate),
+  previousCompany1EndDate: toDate(profile.previousCompany1EndDate),
+  previousCompany2Name: profile.previousCompany2Name ?? null,
+  previousCompany2StartDate: toDate(profile.previousCompany2StartDate),
+  previousCompany2EndDate: toDate(profile.previousCompany2EndDate),
+  previousCompany3Name: profile.previousCompany3Name ?? null,
+  previousCompany3StartDate: toDate(profile.previousCompany3StartDate),
+  previousCompany3EndDate: toDate(profile.previousCompany3EndDate),
+  weeklyWorkHours: profile.weeklyWorkHours ?? null,
+  monthlyEstimatedSalary: profile.monthlyEstimatedSalary ?? null,
+  postalCode: profile.postalCode ?? null,
+  prefecture: profile.prefecture ?? null,
+  city: profile.city ?? null,
+  streetAddress: profile.streetAddress ?? null,
+  emergencyContactName: profile.emergencyContactName ?? null,
+  emergencyContactRelationship: profile.emergencyContactRelationship ?? null,
+  emergencyContactPhone: profile.emergencyContactPhone ?? null,
+  hasSpouse: profile.hasSpouse ?? null,
+  hasChildren: profile.hasChildren ?? null,
+  hasDependents: profile.hasDependents ?? null,
+  myNumber: profile.myNumber ?? null,
+  employmentInsuranceNumber: profile.employmentInsuranceNumber ?? null,
+  basicPensionNumber: profile.basicPensionNumber ?? null,
+  salaryAccount: profile.salaryAccount ?? null,
+});
+
+/** 社員スキルテーブルの作成データ */
+const toSkillsCreate = (employee: Employee) => ({
+  create: employee.skills.map(({ skillId, years }) => ({ skillId, years })),
+});
+
+/** 案件履歴テーブル（＋案件スキル・契約）の作成データ */
+const toProjectHistoriesCreate = (employee: Employee) => ({
+  create: employee.projectHistories.map((history) => ({
+    active: history.active,
+    projectName: history.projectName,
+    factory: history.factory,
+    startDate: new Date(history.startDate),
+    endDate: toDate(history.endDate),
+    skills: {
+      create: history.skillIds.map((skillId) => ({ skillId })),
+    },
+    contracts: {
+      create: history.contracts.map((contract) => ({
+        startDate: new Date(contract.startDate),
+        unitPrice: contract.unitPrice ?? null,
+      })),
+    },
+  })),
+});
+
 /**
- * 既存社員コードの最大値を取得する（論理削除済みも含む。削除済みの
- * コードもDBの一意制約を占有し続けるため）。
- * EMPプレフィックス＋ゼロ埋め数字という前提の下、「文字数優先→文字列
- * 降順」が数値としての降順と一致する（EMP1000はEMP999より長いので
- * 必ず先に来る）。
+ * 既存社員コードの最大値を取得する。
  */
-export const findLastEmployeeCode = async (): Promise<string | null> => {
+const findLastEmployeeCode = async (): Promise<string | null> => {
+  // 論理削除済みも対象にする（削除済みの社員のコードも、重複禁止の対象に残り続けるため）
+  // 文字数→文字列の順に並べると、数値として大きい順になる（EMP1000がEMP999より先に来る）
+  const pattern = `^${EMPLOYEE_CODE_PREFIX}[0-9]+$`;
   const rows = await prisma.$queryRaw<Array<{ employee_code: string }>>`
     SELECT employee_code FROM employee
-    WHERE employee_code ~ '^EMP[0-9]+$'
+    WHERE employee_code ~ ${pattern}
     ORDER BY LENGTH(employee_code) DESC, employee_code DESC
     LIMIT 1
   `;
   return rows[0]?.employee_code ?? null;
 };
 
+/** DBから社員を読み込んで組み立てる（存在しない・論理削除済みならnull） */
+const findById = async (employeeId: number): Promise<Employee | null> => {
+  // 社員は丸ごと読み込むので、子テーブルもまとめて読み込む（保存した順に並べる）
+  const row = await prisma.employee.findFirst({
+    where: { id: employeeId, isDelete: false },
+    include: {
+      employeeSkills: { orderBy: { id: "asc" } },
+      projectHistories: {
+        orderBy: { id: "asc" },
+        include: {
+          skills: { orderBy: { id: "asc" } },
+          contracts: { orderBy: { id: "asc" } },
+        },
+      },
+    },
+  });
+  if (!row) return null;
+
+  // DBの形（nullとDate）を、ドメインの形（undefinedと文字列）に変換して組み立てる
+  return Employee.reconstruct({
+    id: row.id,
+    // 保存時に「他の人が先に更新していないか」を確かめるため、読み込んだ時点の更新日時を持たせる
+    version: row.updatedAt,
+    employeeCode: row.employeeCode,
+    profile: {
+      name: row.name,
+      specialty: row.specialty,
+      workStatus: row.workStatus,
+      furigana: row.furigana ?? undefined,
+      email: row.email ?? undefined,
+      birthDate: toOptionalDateString(row.birthDate),
+      gender: row.gender ?? undefined,
+      phone: row.phone ?? undefined,
+      joinDate: toOptionalDateString(row.joinDate),
+      gitHub: row.gitHub ?? undefined,
+      trainingEndDate: toOptionalDateString(row.trainingEndDate),
+      previousCompany1Name: row.previousCompany1Name ?? undefined,
+      previousCompany1StartDate: toOptionalDateString(row.previousCompany1StartDate),
+      previousCompany1EndDate: toOptionalDateString(row.previousCompany1EndDate),
+      previousCompany2Name: row.previousCompany2Name ?? undefined,
+      previousCompany2StartDate: toOptionalDateString(row.previousCompany2StartDate),
+      previousCompany2EndDate: toOptionalDateString(row.previousCompany2EndDate),
+      previousCompany3Name: row.previousCompany3Name ?? undefined,
+      previousCompany3StartDate: toOptionalDateString(row.previousCompany3StartDate),
+      previousCompany3EndDate: toOptionalDateString(row.previousCompany3EndDate),
+      weeklyWorkHours: row.weeklyWorkHours ?? undefined,
+      monthlyEstimatedSalary: row.monthlyEstimatedSalary ?? undefined,
+      postalCode: row.postalCode ?? undefined,
+      prefecture: row.prefecture ?? undefined,
+      city: row.city ?? undefined,
+      streetAddress: row.streetAddress ?? undefined,
+      emergencyContactName: row.emergencyContactName ?? undefined,
+      emergencyContactRelationship: row.emergencyContactRelationship ?? undefined,
+      emergencyContactPhone: row.emergencyContactPhone ?? undefined,
+      hasSpouse: row.hasSpouse ?? undefined,
+      hasChildren: row.hasChildren ?? undefined,
+      hasDependents: row.hasDependents ?? undefined,
+      myNumber: row.myNumber ?? undefined,
+      employmentInsuranceNumber: row.employmentInsuranceNumber ?? undefined,
+      basicPensionNumber: row.basicPensionNumber ?? undefined,
+      salaryAccount: row.salaryAccount ?? undefined,
+    },
+    skills: row.employeeSkills.map(({ skillId, years }) => ({ skillId, years })),
+    projectHistories: row.projectHistories.map((history) => ({
+      active: history.active,
+      projectName: history.projectName,
+      factory: history.factory,
+      skills: history.skills.map(({ skillId }) => skillId),
+      startDate: toDateString(history.startDate),
+      endDate: toOptionalDateString(history.endDate),
+      contracts: history.contracts.map((contract) => ({
+        startDate: toDateString(contract.startDate),
+        unitPrice: contract.unitPrice ?? undefined,
+      })),
+    })),
+  });
+};
+
 /**
- * 検証済みのEmployee集約を永続化する（社員コード採番・業務ルール検証は
- * 呼び出し側で完了している前提）。
+ * チェック済みの社員をDBに保存する
  */
-export const insertEmployee = async (
-  employee: Employee,
-  data: CreateEmployeeInput,
-): Promise<{ employeeId: number }> => {
+const insert = async (employee: Employee): Promise<number> => {
   try {
     return await prisma.$transaction(async (tx) => {
-      await assertSkillIdsExist(tx, collectSkillIds(data));
+      await assertSkillIdsExist(
+        tx,
+        collectSkillIds(employee.skills, employee.projectHistories),
+      );
 
+      // 本体と子テーブル（スキル・案件履歴・案件スキル・契約）を1回のcreateでまとめて作る
       const created = await tx.employee.create({
         data: {
           employeeCode: employee.employeeCode,
-          name: data.name,
-          furigana: data.furigana,
-          email: data.email,
-          birthDate: new Date(data.birthDate),
-          gender: data.gender,
-          specialty: data.specialty,
-          workStatus: data.workStatus,
-          ...(data.gitHub !== undefined && { gitHub: data.gitHub }),
-          ...(data.phone !== undefined && { phone: data.phone }),
-          ...(data.joinDate !== undefined && {
-            joinDate: new Date(data.joinDate),
-          }),
-          ...(data.trainingEndDate !== undefined && {
-            trainingEndDate: new Date(data.trainingEndDate),
-          }),
-          ...(data.previousCompany1Name !== undefined && {
-            previousCompany1Name: data.previousCompany1Name,
-          }),
-          ...(data.previousCompany1StartDate !== undefined && {
-            previousCompany1StartDate: new Date(data.previousCompany1StartDate),
-          }),
-          ...(data.previousCompany1EndDate !== undefined && {
-            previousCompany1EndDate: new Date(data.previousCompany1EndDate),
-          }),
-          ...(data.previousCompany2Name !== undefined && {
-            previousCompany2Name: data.previousCompany2Name,
-          }),
-          ...(data.previousCompany2StartDate !== undefined && {
-            previousCompany2StartDate: new Date(data.previousCompany2StartDate),
-          }),
-          ...(data.previousCompany2EndDate !== undefined && {
-            previousCompany2EndDate: new Date(data.previousCompany2EndDate),
-          }),
-          ...(data.previousCompany3Name !== undefined && {
-            previousCompany3Name: data.previousCompany3Name,
-          }),
-          ...(data.previousCompany3StartDate !== undefined && {
-            previousCompany3StartDate: new Date(data.previousCompany3StartDate),
-          }),
-          ...(data.previousCompany3EndDate !== undefined && {
-            previousCompany3EndDate: new Date(data.previousCompany3EndDate),
-          }),
-          ...(data.weeklyWorkHours !== undefined && {
-            weeklyWorkHours: data.weeklyWorkHours,
-          }),
-          ...(data.monthlyEstimatedSalary !== undefined && {
-            monthlyEstimatedSalary: data.monthlyEstimatedSalary,
-          }),
-          ...(data.postalCode !== undefined && { postalCode: data.postalCode }),
-          ...(data.prefecture !== undefined && { prefecture: data.prefecture }),
-          ...(data.city !== undefined && { city: data.city }),
-          ...(data.streetAddress !== undefined && {
-            streetAddress: data.streetAddress,
-          }),
-          ...(data.emergencyContactName !== undefined && {
-            emergencyContactName: data.emergencyContactName,
-          }),
-          ...(data.emergencyContactRelationship !== undefined && {
-            emergencyContactRelationship: data.emergencyContactRelationship,
-          }),
-          ...(data.emergencyContactPhone !== undefined && {
-            emergencyContactPhone: data.emergencyContactPhone,
-          }),
-          ...(employee.hasSpouse !== undefined && {
-            hasSpouse: employee.hasSpouse,
-          }),
-          ...(employee.hasChildren !== undefined && {
-            hasChildren: employee.hasChildren,
-          }),
-          ...(employee.hasDependents !== undefined && {
-            hasDependents: employee.hasDependents,
-          }),
-          ...(data.myNumber !== undefined && { myNumber: data.myNumber }),
-          ...(data.employmentInsuranceNumber !== undefined && {
-            employmentInsuranceNumber: data.employmentInsuranceNumber,
-          }),
-          ...(data.basicPensionNumber !== undefined && {
-            basicPensionNumber: data.basicPensionNumber,
-          }),
-          ...(data.salaryAccount !== undefined && {
-            salaryAccount: data.salaryAccount,
-          }),
-
-          /** 社員スキルテーブル */
-          employeeSkills: {
-            create: data.skills.map((skill) => ({
-              skillId: skill.skillId,
-              years: skill.years,
-            })),
-          },
-
-          /** 案件履歴テーブル（Employee集約が検証済みのProjectHistoryを永続化するだけ） */
-          projectHistories: {
-            create: employee.projectHistories.map((project) => ({
-              active: project.active,
-              projectName: project.projectName,
-              factory: project.factory,
-              startDate: new Date(project.startDate),
-              ...(project.endDate !== undefined && {
-                endDate: new Date(project.endDate),
-              }),
-
-              skills: {
-                create: project.skillIds.map((skillId) => ({ skillId })),
-              },
-              contracts: {
-                create: project.contracts.map((contract) => ({
-                  startDate: new Date(contract.startDate),
-                  ...(contract.unitPrice !== undefined && {
-                    unitPrice: contract.unitPrice,
-                  }),
-                })),
-              },
-            })),
-          },
+          ...toEmployeeColumns(employee),
+          employeeSkills: toSkillsCreate(employee),
+          projectHistories: toProjectHistoriesCreate(employee),
         },
       });
-
-      return { employeeId: created.id };
+      return created.id;
     });
   } catch (error) {
-    const duplicateFieldError = toDuplicateFieldError(error);
-    if (duplicateFieldError) throw duplicateFieldError;
-    throw error;
+    // Prismaのエラーをドメインのエラーに変換して投げ直す（それ以外はそのまま）
+    throw toDomainError(error);
   }
-};
-
-type PreviousCompanyDates = {
-  previousCompany1StartDate: string | null;
-  previousCompany1EndDate: string | null;
-  previousCompany2StartDate: string | null;
-  previousCompany2EndDate: string | null;
-  previousCompany3StartDate: string | null;
-  previousCompany3EndDate: string | null;
 };
 
 /**
- * 対象社員の前職1〜3社目の開始日・終了日を取得する（PATCHが一部の
- * フィールドしか送らない場合に、保存済みの値とマージして検証するため）。
- * 存在しない・論理削除済みならnullを返す（存在確認を兼ねる）。
+ * 保存済みの社員を更新する。
  */
-export const findPreviousCompanyDates = async (
-  employeeId: number,
-): Promise<PreviousCompanyDates | null> => {
-  const employee = await prisma.employee.findFirst({
-    where: { id: employeeId, isDelete: false },
-    select: {
-      previousCompany1StartDate: true,
-      previousCompany1EndDate: true,
-      previousCompany2StartDate: true,
-      previousCompany2EndDate: true,
-      previousCompany3StartDate: true,
-      previousCompany3EndDate: true,
-    },
-  });
-  if (!employee) return null;
-
-  const toDateString = (date: Date | null) =>
-    date ? date.toISOString().slice(0, 10) : null;
-
-  return {
-    previousCompany1StartDate: toDateString(employee.previousCompany1StartDate),
-    previousCompany1EndDate: toDateString(employee.previousCompany1EndDate),
-    previousCompany2StartDate: toDateString(employee.previousCompany2StartDate),
-    previousCompany2EndDate: toDateString(employee.previousCompany2EndDate),
-    previousCompany3StartDate: toDateString(employee.previousCompany3StartDate),
-    previousCompany3EndDate: toDateString(employee.previousCompany3EndDate),
-  };
-};
-
-export const updateEmployee = async (
-  employeeId: number,
-  data: UpdateEmployeeInput,
-) => {
-  if (data.skills !== undefined) {
-    Employee.assertNoDuplicateSkillIds(data.skills.map((skill) => skill.skillId));
+const update = async (employee: Employee): Promise<void> => {
+  const { id: employeeId, version, skillsReplaced, projectHistoriesReplaced } =
+    employee;
+  if (employeeId === null || version === null) {
+    throw new Error("未登録の社員は更新できません");
   }
-  const projectHistories = data.projects?.map((project) =>
-    ProjectHistory.create(project),
-  );
 
-  const updateData: Prisma.EmployeeUpdateInput = {};
-
-  if (data.name !== undefined) updateData.name = data.name;
-  if (data.furigana !== undefined) updateData.furigana = data.furigana;
-  if (data.birthDate !== undefined)
-    updateData.birthDate = new Date(data.birthDate);
-  if (data.gender !== undefined) updateData.gender = data.gender;
-  if (data.specialty !== undefined) updateData.specialty = data.specialty;
-  if (data.workStatus !== undefined) updateData.workStatus = data.workStatus;
-  if (data.gitHub !== undefined) updateData.gitHub = data.gitHub;
-  if (data.phone !== undefined) updateData.phone = data.phone;
-
-  if (data.joinDate !== undefined)
-    updateData.joinDate = new Date(data.joinDate);
-  if (data.trainingEndDate !== undefined)
-    updateData.trainingEndDate = new Date(data.trainingEndDate);
-
-  if (data.previousCompany1Name !== undefined)
-    updateData.previousCompany1Name = data.previousCompany1Name;
-  if (data.previousCompany1StartDate !== undefined)
-    updateData.previousCompany1StartDate = new Date(
-      data.previousCompany1StartDate,
-    );
-  if (data.previousCompany1EndDate !== undefined)
-    updateData.previousCompany1EndDate = new Date(data.previousCompany1EndDate);
-  if (data.previousCompany2Name !== undefined)
-    updateData.previousCompany2Name = data.previousCompany2Name;
-  if (data.previousCompany2StartDate !== undefined)
-    updateData.previousCompany2StartDate = new Date(
-      data.previousCompany2StartDate,
-    );
-  if (data.previousCompany2EndDate !== undefined)
-    updateData.previousCompany2EndDate = new Date(data.previousCompany2EndDate);
-  if (data.previousCompany3Name !== undefined)
-    updateData.previousCompany3Name = data.previousCompany3Name;
-  if (data.previousCompany3StartDate !== undefined)
-    updateData.previousCompany3StartDate = new Date(
-      data.previousCompany3StartDate,
-    );
-  if (data.previousCompany3EndDate !== undefined)
-    updateData.previousCompany3EndDate = new Date(data.previousCompany3EndDate);
-
-  if (data.weeklyWorkHours !== undefined)
-    updateData.weeklyWorkHours = data.weeklyWorkHours;
-  if (data.monthlyEstimatedSalary !== undefined)
-    updateData.monthlyEstimatedSalary = data.monthlyEstimatedSalary;
-
-  if (data.postalCode !== undefined) updateData.postalCode = data.postalCode;
-  if (data.prefecture !== undefined) updateData.prefecture = data.prefecture;
-  if (data.city !== undefined) updateData.city = data.city;
-  if (data.streetAddress !== undefined)
-    updateData.streetAddress = data.streetAddress;
-
-  if (data.emergencyContactName !== undefined)
-    updateData.emergencyContactName = data.emergencyContactName;
-  if (data.emergencyContactRelationship !== undefined)
-    updateData.emergencyContactRelationship = data.emergencyContactRelationship;
-  if (data.emergencyContactPhone !== undefined)
-    updateData.emergencyContactPhone = data.emergencyContactPhone;
-
-  if (data.hasSpouse !== undefined)
-    updateData.hasSpouse = Employee.toBoolean(data.hasSpouse);
-  if (data.hasChildren !== undefined)
-    updateData.hasChildren = Employee.toBoolean(data.hasChildren);
-  if (data.hasDependents !== undefined)
-    updateData.hasDependents = Employee.toBoolean(data.hasDependents);
-
-  if (data.myNumber !== undefined) updateData.myNumber = data.myNumber;
-  if (data.employmentInsuranceNumber !== undefined)
-    updateData.employmentInsuranceNumber = data.employmentInsuranceNumber;
-  if (data.basicPensionNumber !== undefined)
-    updateData.basicPensionNumber = data.basicPensionNumber;
-  if (data.salaryAccount !== undefined)
-    updateData.salaryAccount = data.salaryAccount;
-
-  /**
-   * 子データ（skills/projects）を物理削除して作り直す。
-   * フロントのMemberProfileForm（skills/projectsタブ）は追加・編集・削除の
-   * どの操作でも配列全体をPATCHで送信する設計で、個別行の履歴保持や
-   * 監査UIも存在しないため、全体削除→作り直しはフロントの設計と一致する
-   * 意図的な戦略（2026-09-29、フロント調査済み）。他テーブルの論理削除
-   * （isDelete）とは扱いが異なる点に注意。
-   */
   try {
-    return await prisma.$transaction(async (tx) => {
-      const existing = await tx.employee.findFirst({
-        where: { id: employeeId, isDelete: false },
-        select: { id: true },
+    await prisma.$transaction(async (tx) => {
+      // 1. 基本情報を更新する。読み込んだ時点のupdatedAtのままのときだけ更新され、
+      //    変わっていれば（他の更新・削除が入っていれば）更新件数が0になる
+      const { count } = await tx.employee.updateMany({
+        where: { id: employeeId, isDelete: false, updatedAt: version },
+        data: toEmployeeColumns(employee),
       });
-      if (!existing) {
-        throw new EmployeeNotFoundError();
+      if (count === 0) {
+        throw new ConcurrentUpdateError();
       }
 
-      await assertSkillIdsExist(tx, collectSkillIds(data));
+      // 2. 差し替えた子テーブルのスキルだけ、存在を確認する
+      await assertSkillIdsExist(
+        tx,
+        collectSkillIds(
+          skillsReplaced ? employee.skills : [],
+          projectHistoriesReplaced ? employee.projectHistories : [],
+        ),
+      );
 
-      if (data.skills !== undefined) {
+      // 3. 差し替えた子テーブルを物理削除する（外部キーがあるので、案件スキル・契約→案件履歴の順に消す）
+      if (skillsReplaced) {
         await tx.employeeSkill.deleteMany({ where: { employeeId } });
       }
-      if (data.projects !== undefined) {
-        const existingHistories = await tx.employeeProjectHistory.findMany({
-          where: { employeeId },
-          select: { id: true },
-        });
-        const historyIds = existingHistories.map((h) => h.id);
-        if (historyIds.length > 0) {
-          await tx.employeeProjectHistorySkill.deleteMany({
-            where: { projectHistoryId: { in: historyIds } },
-          });
-          await tx.employeeProjectContract.deleteMany({
-            where: { projectHistoryId: { in: historyIds } },
-          });
-        }
+      if (projectHistoriesReplaced) {
+        const ofThisEmployee = { projectHistory: { employeeId } };
+        await tx.employeeProjectHistorySkill.deleteMany({ where: ofThisEmployee });
+        await tx.employeeProjectContract.deleteMany({ where: ofThisEmployee });
         await tx.employeeProjectHistory.deleteMany({ where: { employeeId } });
       }
 
-      /** 更新データ */
-      const updated = await tx.employee.update({
-        where: { id: employeeId },
-        data: {
-          ...updateData,
-
-          /** 社員スキルテーブル */
-          ...(data.skills !== undefined && {
-            employeeSkills: {
-              create: data.skills.map((skill) => ({
-                skillId: skill.skillId,
-                years: skill.years,
-              })),
-            },
-          }),
-
-          /** 案件履歴テーブル（検証済みのProjectHistoryを永続化するだけ） */
-          ...(projectHistories !== undefined && {
-            projectHistories: {
-              create: projectHistories.map((project) => ({
-                active: project.active,
-                projectName: project.projectName,
-                factory: project.factory,
-                startDate: new Date(project.startDate),
-                ...(project.endDate !== undefined && {
-                  endDate: new Date(project.endDate),
-                }),
-                skills: {
-                  create: project.skillIds.map((skillId) => ({ skillId })),
-                },
-                contracts: {
-                  create: project.contracts.map((contract) => ({
-                    startDate: new Date(contract.startDate),
-                    ...(contract.unitPrice !== undefined && {
-                      unitPrice: contract.unitPrice,
-                    }),
-                  })),
-                },
-              })),
-            },
-          }),
-        },
-      });
-
-      return updated;
+      // 4. 差し替えた子テーブルを作り直す
+      if (skillsReplaced || projectHistoriesReplaced) {
+        await tx.employee.update({
+          where: { id: employeeId },
+          data: {
+            ...(skillsReplaced && { employeeSkills: toSkillsCreate(employee) }),
+            ...(projectHistoriesReplaced && {
+              projectHistories: toProjectHistoriesCreate(employee),
+            }),
+          },
+        });
+      }
     });
   } catch (error) {
-    const duplicateFieldError = toDuplicateFieldError(error);
-    if (duplicateFieldError) throw duplicateFieldError;
-    throw error;
+    throw toDomainError(error);
   }
+};
+
+/** EmployeeRepository（ポート）のPrisma実装 */
+export const employeeRepository: EmployeeRepository = {
+  findLastEmployeeCode,
+  findById,
+  insert,
+  update,
 };
 
 export const getEmployeeList = async (filters?: {

@@ -200,11 +200,7 @@ export const createEmployeeSchema = z.object({
         years: z.coerce.number().min(0),
       }),
     )
-    .max(50)
-    .refine(
-      (skills) => new Set(skills.map((skill) => skill.skillId)).size === skills.length,
-      "スキルが重複して指定されています",
-    ),
+    .max(50),
 
   /* 案件履歴 */
   projects: z
@@ -233,11 +229,7 @@ export const createEmployeeSchema = z.object({
           .int()
           .positive()
         )
-          .max(20)
-          .refine(
-            (ids) => new Set(ids).size === ids.length,
-            "スキルが重複して指定されています",
-          ),
+          .max(20),
 
         /* 参画開始日 */
         startDate: z.iso.date(),
@@ -468,10 +460,6 @@ export const updateEmployeeSchema = z.object({
       }),
     )
     .max(50)
-    .refine(
-      (skills) => new Set(skills.map((skill) => skill.skillId)).size === skills.length,
-      "スキルが重複して指定されています",
-    )
     .optional(),
 
   /* 案件履歴 */
@@ -501,11 +489,7 @@ export const updateEmployeeSchema = z.object({
           .int()
           .positive()
         )
-          .max(20)
-          .refine(
-            (ids) => new Set(ids).size === ids.length,
-            "スキルが重複して指定されています",
-          ),
+          .max(20),
 
         /* 参画開始日 */
         startDate: z.iso.date(),
