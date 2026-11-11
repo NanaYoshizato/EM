@@ -327,6 +327,29 @@ async function main() {
     ],
   });
 
+  // ----------------------
+  // ProjectAssignment単価改定履歴（assignment1は契約開始後に単価改定があった例）
+  // ----------------------
+  await prisma.projectAssignmentContract.createMany({
+    data: [
+      {
+        projectAssignmentId: assignment1.id,
+        startDate: new Date("2025-04-01"),
+        unitPrice: 650000,
+      },
+      {
+        projectAssignmentId: assignment1.id,
+        startDate: new Date("2025-10-01"),
+        unitPrice: 680000,
+      },
+      {
+        projectAssignmentId: assignment2.id,
+        startDate: new Date("2026-01-01"),
+        unitPrice: 700000,
+      },
+    ],
+  });
+
   console.log("🌱 Seed data created!");
 }
 
