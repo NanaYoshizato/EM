@@ -257,7 +257,7 @@ model ProjectAssignment {
   startDate           DateTime?        @map("start_date")
   endDate             DateTime?        @map("end_date")
 
-  contractPrice       Int?             @map("contract_price") // 契約単価
+  contractPrice       Int?             @map("contract_price") // 契約単価（最新の単価。履歴はcontractsを参照）
   excessUnitPrice     Int?             @map("excess_unit_price") // 超過単価
   deductionUnitPrice  Int?             @map("deduction_unit_price") // 控除単価
 
@@ -267,6 +267,7 @@ model ProjectAssignment {
   mentor              User?            @relation(fields: [mentorId], references: [id])
 
   frameworks          ProjectAssignmentFramework[]
+  contracts           ProjectAssignmentContract[]
 
   isDelete            Boolean          @default(false) @map("is_delete")
   createrId           String?          @map("creater_id")
@@ -277,6 +278,26 @@ model ProjectAssignment {
   @@unique([projectId, employeeId])
   @@index([status])
   @@map("project_assignment")
+}
+
+// 案件アサインの単価改定履歴（フロントの案件履歴画面がcontracts[]として複数件保持する前提に合わせた構造）
+model ProjectAssignmentContract {
+  id                  Int                @id @default(autoincrement())
+  projectAssignmentId Int                @map("project_assignment_id")
+
+  projectAssignment   ProjectAssignment  @relation(fields: [projectAssignmentId], references: [id])
+
+  startDate           DateTime           @map("start_date") // この単価の適用開始日
+  unitPrice           Int                @map("unit_price")
+
+  isDelete            Boolean            @default(false) @map("is_delete")
+  createrId           String?            @map("creater_id")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updaterId           String?            @map("updater_id")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  @@index([projectAssignmentId])
+  @@map("project_assignment_contract")
 }
 
 // 案件アサイン × 言語 (社員がその案件で使う言語)
