@@ -132,3 +132,5 @@
 5. **フロントのロール対応**: `RoleVariant`型・`master/layout.tsx`・`sales/layout.tsx`等を5ロールに追従させる
 6. **未実装リソースの優先順位付け**: 4節の一覧から、どの機能を次に実装するか（ユーザー数・ビジネスインパクトの観点で）優先順位を決める
 7. **データモデルのすり合わせ**: 5節の差分について、設計書とバックエンドのどちらを正とするか意思決定する
+
+→ 1・2・4・5は[employee-field-and-api-design.md](./employee-field-and-api-design.md)で確定済み。3・6・7のうち社員情報に関わる部分の具体的な実装項目は[backend-changes-for-frontend-alignment.md](./backend-changes-for-frontend-alignment.md)に洗い出し済み。
