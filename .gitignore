@@ -5,7 +5,7 @@
 /.agents
 .claude
 preflight.md
-docs
+/docs
 firebase-debug.log*
 emulator_data/
 *.log

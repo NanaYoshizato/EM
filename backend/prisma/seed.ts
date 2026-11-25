@@ -345,7 +345,7 @@ async function main() {
   // ----------------------
   // ProjectAssignment
   // ----------------------
-  await prisma.projectAssignment.create({
+  const assignment1 = await prisma.projectAssignment.create({
     data: {
       projectId: projectFull1.id,
       employeeId: employeeFull1.id,
@@ -358,7 +358,7 @@ async function main() {
     },
   });
 
-  await prisma.projectAssignment.create({
+  const assignment2 = await prisma.projectAssignment.create({
     data: {
       projectId: projectFull2.id,
       employeeId: employeeFull2.id,
@@ -366,6 +366,29 @@ async function main() {
       startDate: new Date("2026-01-01"),
       contractPrice: 700000,
     },
+  });
+
+  // ----------------------
+  // ProjectAssignment単価改定履歴（assignment1は契約開始後に単価改定があった例）
+  // ----------------------
+  await prisma.projectAssignmentContract.createMany({
+    data: [
+      {
+        projectAssignmentId: assignment1.id,
+        startDate: new Date("2025-04-01"),
+        unitPrice: 650000,
+      },
+      {
+        projectAssignmentId: assignment1.id,
+        startDate: new Date("2025-10-01"),
+        unitPrice: 680000,
+      },
+      {
+        projectAssignmentId: assignment2.id,
+        startDate: new Date("2026-01-01"),
+        unitPrice: 700000,
+      },
+    ],
   });
 
   console.log("🌱 Seed data created!");
