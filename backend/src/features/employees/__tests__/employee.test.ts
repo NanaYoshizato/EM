@@ -399,6 +399,43 @@ describe("Employee.update", () => {
       }),
     ).toThrow(DuplicateSkillError);
   });
+
+  it("nullが送られてきた項目は、保存済みの値を消す", () => {
+    const employee = restore({ hasSpouse: true });
+    employee.update({ phone: null, hasSpouse: null });
+
+    expect(employee.profile.phone).toBeUndefined();
+    expect(employee.profile.hasSpouse).toBeUndefined();
+    expect(employee.profile.name).toBe("山田太郎");
+  });
+
+  it("前職の終了日をnullで消した場合、日付の前後チェックをしない", () => {
+    const employee = restore({
+      previousCompany1StartDate: "2020-02-01",
+      previousCompany1EndDate: "2020-03-01",
+    });
+    expect(() => employee.update({ previousCompany1EndDate: null })).not.toThrow();
+    expect(employee.profile.previousCompany1EndDate).toBeUndefined();
+  });
+
+  it("案件の終了日・契約単価がnullでも受け付ける（詳細の応答をそのまま送り返せる）", () => {
+    const employee = restore();
+    employee.update({
+      projects: [
+        {
+          active: true,
+          projectName: "案件C",
+          factory: "現場C",
+          skills: [],
+          startDate: "2026-01-01",
+          endDate: null,
+          contracts: [{ startDate: "2026-01-01", unitPrice: null }],
+        },
+      ],
+    });
+
+    expect(employee.projectHistories[0]!.endDate).toBeUndefined();
+  });
 });
 
 describe("DuplicateFieldError", () => {

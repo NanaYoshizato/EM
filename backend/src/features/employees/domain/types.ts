@@ -60,7 +60,7 @@ export type EmployeeSkill = Readonly<{ skillId: number; years: number }>;
 /** 契約単価の履歴（1件分） */
 export type Contract = Readonly<{
 	startDate: string;
-	unitPrice?: number | undefined;
+	unitPrice?: number | null | undefined;
 }>;
 
 /** 案件履歴の入力（リクエストのprojects[]の1件分） */
@@ -70,7 +70,7 @@ export type ProjectHistoryInput = {
 	factory: string;
 	skills: ReadonlyArray<number>;
 	startDate: string;
-	endDate?: string | undefined;
+	endDate?: string | null | undefined;
 	contracts: ReadonlyArray<Contract>;
 };
 
@@ -88,9 +88,14 @@ export type PreviousCompanyDates = Pick<
 /** 家族の有無の項目*/
 export type FamilyField = "hasSpouse" | "hasChildren" | "hasDependents";
 
-/** 外から受け取る基本情報*/
-export type ProfileInput = Omit<EmployeeProfile, FamilyField> & {
-	[K in FamilyField]?: "有" | "無" | undefined;
+/** 必ず値がある項目（nullで消せない） */
+type RequiredProfileField = "name" | "specialty" | "workStatus";
+
+/** 外から受け取る基本情報（任意の項目はnullで「値なし」） */
+export type ProfileInput = Pick<EmployeeProfile, RequiredProfileField> & {
+	[K in Exclude<keyof EmployeeProfile, RequiredProfileField | FamilyField>]?: EmployeeProfile[K] | null;
+} & {
+	[K in FamilyField]?: "有" | "無" | null | undefined;
 };
 
 /** 新規登録の入力 */

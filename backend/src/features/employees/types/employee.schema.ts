@@ -27,13 +27,13 @@ export const createEmployeeSchema = z.object({
   phone: z
     .string()
     .regex(/^0\d{1,4}-?\d{1,4}-?\d{4}$/)
-    .optional(),
+    .nullish(),
 
   /* 入社年月 */
   joinDate: z
     .string()
     .regex(/^\d{4}-\d{2}$/)
-    .optional(),
+    .nullish(),
 
   /* 専門領域 */
   specialty: z.enum(Specialty),
@@ -43,124 +43,124 @@ export const createEmployeeSchema = z.object({
 
   /* GitHubユーザー名 */
   gitHub: gitHubUsername()
-    .optional(),
+    .nullish(),
 
   /* 研修終了日 */
-  trainingEndDate: z.iso.date().optional(),
+  trainingEndDate: z.iso.date().nullish(),
 
   /* 前職1社目の会社名 */
   previousCompany1Name: freeText()
     .max(100)
-    .optional(),
+    .nullish(),
 
   /* 前職1社目の在籍開始日 */
-  previousCompany1StartDate: z.iso.date().optional(),
+  previousCompany1StartDate: z.iso.date().nullish(),
 
   /* 前職1社目の在籍終了日 */
-  previousCompany1EndDate: z.iso.date().optional(),
+  previousCompany1EndDate: z.iso.date().nullish(),
 
   /* 前職2社目の会社名 */
   previousCompany2Name: freeText()
     .max(100)
-    .optional(),
+    .nullish(),
 
   /* 前職2社目の在籍開始日 */
-  previousCompany2StartDate: z.iso.date().optional(),
+  previousCompany2StartDate: z.iso.date().nullish(),
 
   /* 前職2社目の在籍終了日 */
-  previousCompany2EndDate: z.iso.date().optional(),
+  previousCompany2EndDate: z.iso.date().nullish(),
 
   /* 前職3社目の会社名 */
   previousCompany3Name: freeText()
     .max(100)
-    .optional(),
+    .nullish(),
 
   /* 前職3社目の在籍開始日 */
-  previousCompany3StartDate: z.iso.date().optional(),
+  previousCompany3StartDate: z.iso.date().nullish(),
 
   /* 前職3社目の在籍終了日 */
-  previousCompany3EndDate: z.iso.date().optional(),
+  previousCompany3EndDate: z.iso.date().nullish(),
 
   /* 週あたり稼働時間 */
   weeklyWorkHours: freeText()
     .max(20)
-    .optional(),
+    .nullish(),
 
   /* 月額想定給与 */
   monthlyEstimatedSalary: z
     .coerce.number()
     .int()
     .min(0)
-    .optional(),
+    .nullish(),
 
   /* 郵便番号 */
   postalCode: z
     .string()
     .regex(/^\d{3}-?\d{4}$/)
-    .optional(),
+    .nullish(),
 
   /* 都道府県 */
   prefecture: freeText()
     .max(10)
-    .optional(),
+    .nullish(),
 
   /* 市区町村 */
   city: freeText()
     .max(100)
-    .optional(),
+    .nullish(),
 
   /* 番地・建物名 */
   streetAddress: freeText()
     .max(100)
-    .optional(),
+    .nullish(),
 
   /* 緊急連絡先氏名 */
   emergencyContactName: personName()
     .max(50)
-    .optional(),
+    .nullish(),
 
   /* 緊急連絡先続柄 */
   emergencyContactRelationship: freeText()
     .max(20)
-    .optional(),
+    .nullish(),
 
   /* 緊急連絡先電話番号 */
   emergencyContactPhone: z
     .string()
     .regex(/^0\d{1,4}-?\d{1,4}-?\d{4}$/)
-    .optional(),
+    .nullish(),
 
   /* 配偶者の有無 */
-  hasSpouse: z.enum(["有", "無"]).optional(),
+  hasSpouse: z.enum(["有", "無"]).nullish(),
 
   /* 子の有無 */
-  hasChildren: z.enum(["有", "無"]).optional(),
+  hasChildren: z.enum(["有", "無"]).nullish(),
 
   /* 扶養家族の有無 */
-  hasDependents: z.enum(["有", "無"]).optional(),
+  hasDependents: z.enum(["有", "無"]).nullish(),
 
   /* マイナンバー */
   myNumber: z
     .string()
     .regex(/^\d{12}$/)
-    .optional(),
+    .nullish(),
 
   /* 雇用保険番号 */
   employmentInsuranceNumber: z
     .string()
     .regex(/^\d{4}-\d{6}-\d{1}$/)
-    .optional(),
+    .nullish(),
 
   /* 基礎年金番号 */
   basicPensionNumber: z
     .string()
     .regex(/^\d{4}-\d{6}$/)
-    .optional(),
+    .nullish(),
 
   /* 給与振込口座 */
   salaryAccount: freeText()
     .max(100)
-    .optional(),
+    .nullish(),
 
   /* 保有スキル */
   skills: z
@@ -206,7 +206,7 @@ export const createEmployeeSchema = z.object({
         startDate: z.iso.date(),
 
         /* 参画終了日 */
-        endDate: z.iso.date().optional(),
+        endDate: z.iso.date().nullish(),
 
         /* 契約単価履歴 */
         contracts: z
@@ -220,7 +220,7 @@ export const createEmployeeSchema = z.object({
                 .coerce.number()
                 .int()
                 .min(0)
-                .optional(),
+                .nullish(),
             }),
           )
           .max(20),
@@ -254,13 +254,13 @@ export const updateEmployeeSchema = z.object({
   phone: z
     .string()
     .regex(/^0\d{1,4}-?\d{1,4}-?\d{4}$/)
-    .optional(),
+    .nullish(),
 
   /* 入社年月 */
   joinDate: z
     .string()
     .regex(/^\d{4}-\d{2}$/, "入社年月はYYYY-MM形式で入力してください。")
-    .optional(),
+    .nullish(),
 
   /* 専門領域 */
   specialty: z.enum(Specialty).optional(),
@@ -270,124 +270,124 @@ export const updateEmployeeSchema = z.object({
 
   /* GitHubユーザー名 */
   gitHub: gitHubUsername()
-    .optional(),
+    .nullish(),
 
   /* 研修終了日 */
-  trainingEndDate: z.iso.date().optional(),
+  trainingEndDate: z.iso.date().nullish(),
 
   /* 前職1社目の会社名 */
   previousCompany1Name: freeText()
     .max(100)
-    .optional(),
+    .nullish(),
 
   /* 前職1社目の在籍開始日 */
-  previousCompany1StartDate: z.iso.date().optional(),
+  previousCompany1StartDate: z.iso.date().nullish(),
 
   /* 前職1社目の在籍終了日 */
-  previousCompany1EndDate: z.iso.date().optional(),
+  previousCompany1EndDate: z.iso.date().nullish(),
 
   /* 前職2社目の会社名 */
   previousCompany2Name: freeText()
     .max(100)
-    .optional(),
+    .nullish(),
 
   /* 前職2社目の在籍開始日 */
-  previousCompany2StartDate: z.iso.date().optional(),
+  previousCompany2StartDate: z.iso.date().nullish(),
 
   /* 前職2社目の在籍終了日 */
-  previousCompany2EndDate: z.iso.date().optional(),
+  previousCompany2EndDate: z.iso.date().nullish(),
 
   /* 前職3社目の会社名 */
   previousCompany3Name: freeText()
     .max(100)
-    .optional(),
+    .nullish(),
 
   /* 前職3社目の在籍開始日 */
-  previousCompany3StartDate: z.iso.date().optional(),
+  previousCompany3StartDate: z.iso.date().nullish(),
 
   /* 前職3社目の在籍終了日 */
-  previousCompany3EndDate: z.iso.date().optional(),
+  previousCompany3EndDate: z.iso.date().nullish(),
 
   /* 週あたり稼働時間 */
   weeklyWorkHours: freeText()
     .max(20)
-    .optional(),
+    .nullish(),
 
   /* 月額想定給与 */
   monthlyEstimatedSalary: z
     .coerce.number()
     .int()
     .min(0)
-    .optional(),
+    .nullish(),
 
   /* 郵便番号 */
   postalCode: z
     .string()
     .regex(/^\d{3}-?\d{4}$/)
-    .optional(),
+    .nullish(),
 
   /* 都道府県 */
   prefecture: freeText()
     .max(10)
-    .optional(),
+    .nullish(),
 
   /* 市区町村 */
   city: freeText()
     .max(100)
-    .optional(),
+    .nullish(),
 
   /* 番地・建物名 */
   streetAddress: freeText()
     .max(100)
-    .optional(),
+    .nullish(),
 
   /* 緊急連絡先氏名 */
   emergencyContactName: personName()
     .max(50)
-    .optional(),
+    .nullish(),
 
   /* 緊急連絡先続柄 */
   emergencyContactRelationship: freeText()
     .max(20)
-    .optional(),
+    .nullish(),
 
   /* 緊急連絡先電話番号 */
   emergencyContactPhone: z
     .string()
     .regex(/^0\d{1,4}-?\d{1,4}-?\d{4}$/)
-    .optional(),
+    .nullish(),
 
   /* 配偶者の有無 */
-  hasSpouse: z.enum(["有", "無"]).optional(),
+  hasSpouse: z.enum(["有", "無"]).nullish(),
 
   /* 子の有無 */
-  hasChildren: z.enum(["有", "無"]).optional(),
+  hasChildren: z.enum(["有", "無"]).nullish(),
 
   /* 扶養家族の有無 */
-  hasDependents: z.enum(["有", "無"]).optional(),
+  hasDependents: z.enum(["有", "無"]).nullish(),
 
   /* マイナンバー */
   myNumber: z
     .string()
     .regex(/^\d{12}$/)
-    .optional(),
+    .nullish(),
 
   /* 雇用保険番号 */
   employmentInsuranceNumber: z
     .string()
     .regex(/^\d{4}-\d{6}-\d{1}$/)
-    .optional(),
+    .nullish(),
 
   /* 基礎年金番号 */
   basicPensionNumber: z
     .string()
     .regex(/^\d{4}-\d{6}$/)
-    .optional(),
+    .nullish(),
 
   /* 給与振込口座 */
   salaryAccount: freeText()
     .max(100)
-    .optional(),
+    .nullish(),
 
   /* 保有スキル */
   skills: z
@@ -435,7 +435,7 @@ export const updateEmployeeSchema = z.object({
         startDate: z.iso.date(),
 
         /* 参画終了日 */
-        endDate: z.iso.date().optional(),
+        endDate: z.iso.date().nullish(),
 
         /* 契約単価履歴 */
         contracts: z
@@ -449,7 +449,7 @@ export const updateEmployeeSchema = z.object({
                 .coerce.number()
                 .int()
                 .min(0)
-                .optional(),
+                .nullish(),
             }),
           )
           .max(20),

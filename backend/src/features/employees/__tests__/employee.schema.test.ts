@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { EmployeeListQuerySchema, updateEmployeeSchema } from "../types/employee.schema";
+import { createEmployeeSchema, EmployeeListQuerySchema, updateEmployeeSchema } from "../types/employee.schema";
 
 describe("updateEmployeeSchema — 空の更新", () => {
   it("更新する項目が1つも無ければ弾く", () => {
@@ -12,6 +12,49 @@ describe("updateEmployeeSchema — 空の更新", () => {
 
   it("項目が1つでもあれば通す", () => {
     expect(updateEmployeeSchema.safeParse({ name: "山田花子" }).success).toBe(true);
+  });
+});
+
+describe("null（値を消す・値なし）", () => {
+  it.each([
+    "phone", "joinDate", "gitHub", "trainingEndDate", "previousCompany1Name", "previousCompany1EndDate",
+    "monthlyEstimatedSalary", "postalCode", "hasSpouse", "myNumber", "salaryAccount",
+  ])("更新：任意の項目%sはnullを通す", (field) => {
+    expect(updateEmployeeSchema.safeParse({ [field]: null }).success).toBe(true);
+  });
+
+  it.each(["name", "furigana", "birthDate", "gender", "specialty", "workStatus", "skills", "projects"])(
+    "更新：登録で必須の項目%sはnullを弾く",
+    (field) => {
+      expect(updateEmployeeSchema.safeParse({ [field]: null }).success).toBe(false);
+    },
+  );
+
+  it("登録：任意の項目のnullを通す", () => {
+    const result = createEmployeeSchema.safeParse({
+      email: "a@test.com",
+      name: "山田太郎",
+      furigana: "ヤマダタロウ",
+      birthDate: "2000-01-01",
+      gender: "MALE",
+      specialty: "FE",
+      workStatus: "WAITING",
+      gitHub: null,
+      phone: null,
+      skills: [],
+      projects: [
+        {
+          active: true,
+          projectName: "案件A",
+          factory: "現場A",
+          skills: [],
+          startDate: "2026-01-01",
+          endDate: null,
+          contracts: [{ startDate: "2026-01-01", unitPrice: null }],
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
   });
 });
 

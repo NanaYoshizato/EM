@@ -125,6 +125,19 @@ const withoutUndefined = <T extends object>(
 		Object.entries(obj).filter(([, value]) => value !== undefined),
 	) as { [K in keyof T]?: Exclude<T[K], undefined> };
 
+/** nullを取り得る項目だけ、nullをundefinedに置き換えた型 */
+type NullToUndefined<T> = {
+	[K in keyof T]: null extends T[K] ? Exclude<T[K], null> | undefined : T[K];
+};
+
+/** nullの項目を「値なし」（undefined）にする（PATCHではnullで保存済みの値を消せる） */
+const nullToUndefined = <T extends object>(
+	obj: T,
+): NullToUndefined<T> =>
+	Object.fromEntries(
+		Object.entries(obj).map(([key, value]) => [key, value ?? undefined]),
+	) as NullToUndefined<T>;
+
 /**
  * 案件履歴（値オブジェクト）
  */
@@ -143,7 +156,7 @@ export class ProjectHistory {
 		this.factory = input.factory;
 		this.skillIds = input.skills;
 		this.startDate = input.startDate;
-		this.endDate = input.endDate;
+		this.endDate = input.endDate ?? undefined;
 		this.contracts = input.contracts;
 	}
 
@@ -152,7 +165,7 @@ export class ProjectHistory {
 	static create(input: ProjectHistoryInput): ProjectHistory {
 		assertNoDuplicateSkillIds(input.skills);
 
-		if (input.endDate !== undefined) {
+		if (input.endDate != null) {
 			assertValidDateRange(input.startDate, input.endDate, "案件履歴");
 		}
 		return new ProjectHistory(input);
@@ -167,9 +180,9 @@ export class ProjectHistory {
 // エラーメッセージに使う前職の呼び名
 const PREVIOUS_COMPANY_LABELS = ["前職1社目", "前職2社目", "前職3社目"] as const;
 
-// 有無をtrue/falseに変換するルール
-const toBoolean = (value: "有" | "無" | undefined): boolean | undefined =>
-	value === undefined ? undefined : value === "有";
+// 有無をtrue/falseに変換するルール（null・undefinedはそのまま）
+const toBoolean = (value: "有" | "無" | null | undefined): boolean | null | undefined =>
+	value == null ? value : value === "有";
 
 // true/falseを有無に戻すルール（toBooleanの逆。読み取りで入力と同じ形にして返す）
 export const toFamilyAnswer = (value: boolean | null): "有" | "無" | null =>
@@ -179,7 +192,7 @@ export const toFamilyAnswer = (value: boolean | null): "有" | "無" | null =>
  * 外から受け取った基本情報を集約の形に変換する（POST/PATCH共通）
  * 家族の有無の3項目だけ取り出してbooleanに変換し、残り（rest）はそのまま使う
  */
-const toProfile = <T extends { [K in FamilyField]?: "有" | "無" | undefined }>({
+const toProfile = <T extends { [K in FamilyField]?: "有" | "無" | null | undefined }>({
 	hasSpouse,
 	hasChildren,
 	hasDependents,
@@ -250,7 +263,7 @@ export class Employee {
 		const { skills, projects, ...rest } = input;
 
 		// 業務ルールをチェックする（違反していればエラーになり、社員は作られない）
-		const profile: EmployeeProfile = toProfile(rest);
+		const profile: EmployeeProfile = nullToUndefined(toProfile(rest));
 		Employee.assertValidPreviousCompanyDates(profile);
 		assertNoDuplicateSkillIds(skills.map((skill) => skill.skillId));
 
@@ -290,11 +303,11 @@ export class Employee {
 	update(changes: EmployeeChanges): void {
 		const { skills, projects, ...rest } = changes;
 
-		// 1. 変更後の基本情報を組み立てる（保存済みの値に、送られてきた項目だけを上書きする）
-		const profile: EmployeeProfile = {
+		// 1. 変更後の基本情報を組み立てる（保存済みの値に、送られてきた項目だけを上書きする。nullは値を消す）
+		const profile: EmployeeProfile = nullToUndefined({
 			...this._profile,
 			...withoutUndefined(toProfile(rest)),
-		};
+		});
 		// 2. チェックする（ここでエラーになれば、値は何も変わらない）
 		Employee.assertValidPreviousCompanyDates(profile);
 		if (skills !== undefined) {
