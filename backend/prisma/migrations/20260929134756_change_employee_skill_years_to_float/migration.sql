@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "employee_skill" ALTER COLUMN "years" SET DATA TYPE DOUBLE PRECISION;

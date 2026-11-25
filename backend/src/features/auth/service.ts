@@ -43,22 +43,33 @@ export const logoutService = async (sessionCookie?: string) => {
 
 /** ログインユーザー情報のロジック */
 export const meService = async (sessionCookie?: string) => {
-  if (!sessionCookie) return null;
-  try {
-    const decodedClaims = await authAdmin.verifySessionCookie(sessionCookie, true);
-    const user = await User.findByFirebaseUid(decodedClaims.sub);
-    if (!user || !user.isActive()) return null;
+  const user = await authenticate(sessionCookie);
+  if (!user) return null;
 
-    // 外部へアクセス
-    const employee = await getEmployeeSummaryByUserId(user.id);
-    return {
-      id: user.id,
-      email: user.email,
-      role: user.roleName,
-      roleLabel: user.roleLabel,
-      employee,
-    }
-  } catch (err) {
-    return null;
+  // 外部へアクセス
+  const employee = await getEmployeeSummaryByUserId(user.id);
+  return {
+    email: user.email,
+    role: user.roleName,
+    roleLabel: user.roleLabel,
+    employee, // 社員番号, 名前
   }
 };
+
+/**
+ * 有効なユーザーかどうかトークンチェック
+ */
+export const authenticate = async (sessionCookie?: string): Promise<User | null> => {
+  if (!sessionCookie) return null;
+
+  let uid: string;
+
+  try {
+    uid = (await authAdmin.verifySessionCookie(sessionCookie, true)).sub;
+  } catch {
+    return null;
+  }
+
+  const user = await User.findByFirebaseUid(uid);
+  return user?.isActive() ? user : null;
+}

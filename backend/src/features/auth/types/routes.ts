@@ -47,6 +47,7 @@ export const logoutRoute = createRoute({
   method: "post",
   path: "/logout",
   tags: ["Auth"],
+  security: [{ Bearer: [] }],
   responses: {
     200: {
       content: { "application/json": { schema: MessageSchema } },
@@ -59,6 +60,7 @@ export const meRoute = createRoute({
   method: "get",
   path: "/me",
   tags: ["Auth"],
+  security: [{ Bearer: [] }],
   responses: {
     200: {
       content: { "application/json": { schema: MeResponseSchema } },

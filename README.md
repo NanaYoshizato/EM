@@ -123,4 +123,30 @@ pnpm emulator
 - **Swagger UI**: [http://localhost:3001/ui](http://localhost:3001/ui)
 - **OpenAPIスキーマ（JSON）**: [http://localhost:3001/doc](http://localhost:3001/doc)
 
-`/login`・`/me`など認証が絡むエンドポイントをSwagger UI上で試す場合は、事前にFirebase Auth エミュレータを起動し、対象ユーザーのIDトークンを取得したうえで、Swagger UIの `POST /login` を実行してセッションCookieを発行する必要があります（同一オリジンのSwagger UIから叩くため、以降のリクエストにはCookieが自動的に付与されます）。IDトークンはFirebase Client SDK経由でのサインイン、またはAdmin SDKの`createCustomToken` → `accounts:signInWithCustomToken`（エミュレータのREST API）で取得できます。
+### ログインが必要なAPIを試す手順
+
+社員API（`/api/employees`）・`/api/me`・`/api/logout` は、通行証（ログインAPIが返す`accessToken`）を`Authorization: Bearer`ヘッダーで送る必要があります。
+
+- 1. Firebase Auth エミュレータを起動する（上記「Firebase Auth エミュレータの起動手順」）
+
+- 2. エミュレータにユーザーを作る（初回のみ。uidは初期データ（`backend/prisma/seed.ts`）の`firebaseUid`と同じにする）
+
+```bash
+curl -s -X POST "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/demo-em-project/accounts" \
+  -H "Authorization: Bearer owner" -H "Content-Type: application/json" \
+  -d '{"localId":"admin-firebase-uid","email":"admin@test.com","password":"password"}'
+```
+
+- 3. IDトークンを取得する（レスポンスの`idToken`）
+
+```bash
+curl -s -X POST "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@test.com","password":"password","returnSecureToken":true}'
+```
+
+- 4. Swagger UIの`POST /api/login`に`idToken`を入れて実行し、レスポンスの`accessToken`をコピーする（IDトークンの取得から5分以内に実行する）
+
+- 5. Swagger UI右上の **Authorize** ボタンを押して`accessToken`を貼り付ける。以降のリクエストには`Authorization: Bearer`ヘッダーが自動で付く
+
+#### ※エミュレータのユーザー・パスワードは開発用の仮のもの。本番のFirebaseには作らない

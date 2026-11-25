@@ -1,31 +1,55 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   createEmployee,
-  updateEmployeeService,
-  getEmployeeListService,
-  getEmployeeDetailsService,
+  updateEmployee,
+  getEmployeeDetail,
+  getEmployeeList,
 } from "../service";
 
+// 本物のリポジトリ（Prisma）を読み込まないようにする
 vi.mock("../repository", () => ({
-  createEmployeeWithUser: vi.fn(),
-  updateEmployee: vi.fn(),
-  getEmployeeList: vi.fn(),
-  getEmployeeDetails: vi.fn(),
+  findEmployeeSummaryByUserId: vi.fn(),
 }));
 
+import { Gender, Specialty, WorkStatus } from "@prisma/client";
+import { EmployeeListQuerySchema, type UpdateEmployeeInput } from "../types/employee.schema";
 import {
-  createEmployeeWithUser,
-  updateEmployee,
-  getEmployeeList,
-  getEmployeeDetails,
-} from "../repository";
+  ConcurrentUpdateError,
+  DuplicateFieldError,
+  Employee,
+  InvalidSkillIdError,
+} from "../domain/employee";
+import type {
+  EmployeeDetail,
+  EmployeeQueryRepository,
+  EmployeeRepository,
+  FieldGroup,
+} from "../domain/types";
+import type { Actor } from "@/constants/permissions";
 
-import { Gender, EmployeeStatus } from "@prisma/client";
+/** 操作する人（既存のテストは、権限で止まらない管理者で行う） */
+const admin: Actor = { userId: 1, role: "admin", employeeId: 1 };
+const systemAdmin: Actor = { userId: 2, role: "system_admin", employeeId: 2 };
+const sales: Actor = { userId: 3, role: "sales", employeeId: 3 };
+const mentor: Actor = { userId: 4, role: "mentor", employeeId: 4 };
+const employee: Actor = { userId: 5, role: "employee", employeeId: 5 };
 
-const mockCreateEmployeeWithUser = vi.mocked(createEmployeeWithUser);
-const mockUpdateEmployee = vi.mocked(updateEmployee);
-const mockGetEmployeeList = vi.mocked(getEmployeeList);
-const mockGetEmployeeDetails = vi.mocked(getEmployeeDetails);
+/** テスト用の読み取りリポジトリ（ポートを満たす偽物） */
+const queryRepository = {
+  findDetail: vi.fn<EmployeeQueryRepository["findDetail"]>(),
+  findList: vi.fn<EmployeeQueryRepository["findList"]>(),
+};
+
+/** 保存後に読み直した社員詳細 */
+const savedDetail = { employeeCode: "EMP006", name: "山田太郎" } as EmployeeDetail;
+
+/** テスト用のリポジトリ（ポートを満たす偽物） */
+const repository = {
+  findLastEmployeeCode: vi.fn<EmployeeRepository["findLastEmployeeCode"]>(),
+  findById: vi.fn<EmployeeRepository["findById"]>(),
+  insert: vi.fn<EmployeeRepository["insert"]>(),
+  update: vi.fn<EmployeeRepository["update"]>(),
+};
 
 const baseInput = {
   email: "test@example.com",
@@ -33,206 +57,590 @@ const baseInput = {
   furigana: "ヤマダタロウ",
   birthDate: "1990-01-01",
   gender: Gender.MALE,
+  specialty: Specialty.UNDECIDED,
+  workStatus: WorkStatus.WAITING,
+  skills: [],
+  projects: [],
 };
+
+const storedEmployee = () =>
+  Employee.reconstruct({
+    id: 1,
+    version: new Date("2026-10-01T00:00:00Z"),
+    employeeCode: "EMP001",
+    profile: {
+      name: "山田太郎",
+      specialty: "UNDECIDED",
+      workStatus: "WAITING",
+    },
+    skills: [],
+    projectHistories: [],
+  });
 
 beforeEach(() => {
   vi.clearAllMocks();
+  repository.findLastEmployeeCode.mockResolvedValue(null);
+  repository.insert.mockResolvedValue(1);
+  // clearAllMocksは前のテストで設定した動き（mockRejectedValue等）を消さないので、毎回戻す
+  repository.update.mockResolvedValue(undefined);
+  queryRepository.findDetail.mockResolvedValue(savedDetail);
 });
 
 describe("createEmployee", () => {
-  it("正常に社員とユーザーを作成する", async () => {
-    const expected = { userId: 1, employeeId: 1 };
-    mockCreateEmployeeWithUser.mockResolvedValue(expected);
+  it("最大コードの読み込み→社員を作る→DBに保存の順に呼び、決めた社員コードで保存する", async () => {
+    repository.findLastEmployeeCode.mockResolvedValue("EMP005");
+    repository.insert.mockResolvedValue(6);
 
-    const result = await createEmployee(baseInput);
+    const result = await createEmployee(repository, queryRepository, admin, baseInput);
 
-    expect(mockCreateEmployeeWithUser).toHaveBeenCalledWith(baseInput);
-    expect(result).toEqual(expected);
+    expect(result).toEqual({ code: "SUCCESS", employeeId: 6, detail: savedDetail });
+    const saved = repository.insert.mock.calls[0]![0];
+    expect(saved.employeeCode).toBe("EMP006");
+    expect(saved.profile.name).toBe("山田太郎");
   });
 
-  it("メールアドレス重複時にエラーを投げる", async () => {
-    mockCreateEmployeeWithUser.mockRejectedValue(
-      new Error("Unique constraint failed on the fields: (`email`)"),
-    );
+  it("メールアドレス重複時に結果値として返す", async () => {
+    repository.insert.mockRejectedValue(new DuplicateFieldError("email"));
 
-    await expect(createEmployee(baseInput)).rejects.toThrow(
-      "Unique constraint",
-    );
+    const result = await createEmployee(repository, queryRepository, admin, baseInput);
+
+    expect(result).toEqual({
+      code: "DUPLICATE_EMAIL",
+      message: "メールアドレスが既に使用されています",
+    });
   });
 
-  it("フレームワーク情報を含めて登録できる", async () => {
-    const input = {
+  it("マイナンバー重複時に結果値として返す", async () => {
+    repository.insert.mockRejectedValue(new DuplicateFieldError("myNumber"));
+
+    const result = await createEmployee(repository, queryRepository, admin, baseInput);
+
+    expect(result).toEqual({
+      code: "DUPLICATE_MY_NUMBER",
+      message: "マイナンバーが既に使用されています",
+    });
+    expect(repository.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it("存在しないskillIdの場合、結果値として返す", async () => {
+    repository.insert.mockRejectedValue(new InvalidSkillIdError());
+
+    const result = await createEmployee(repository, queryRepository, admin, baseInput);
+
+    expect(result).toEqual({
+      code: "INVALID_SKILL_ID",
+      message: "指定されたスキルが存在しません",
+    });
+  });
+
+  it("スキルが重複している場合、DBに保存せずに結果値を返す", async () => {
+    const result = await createEmployee(repository, queryRepository, admin, {
       ...baseInput,
-      studiedFrameworkIds: [1, 2],
-      availableFrameworkIds: [3],
-    };
+      skills: [
+        { skillId: 1, years: 1 },
+        { skillId: 1, years: 2 },
+      ],
+    });
 
-    const expected = { userId: 2, employeeId: 2 };
-    mockCreateEmployeeWithUser.mockResolvedValue(expected);
-
-    const result = await createEmployee(input);
-
-    expect(mockCreateEmployeeWithUser).toHaveBeenCalledWith(input);
-    expect(result).toEqual(expected);
-  });
-});
-
-describe("updateEmployeeService", () => {
-  const employeeId = 1;
-  const updateData = { name: "Updated Name", phone: "09012345678" };
-
-  it("正常に社員情報を更新する", async () => {
-    mockUpdateEmployee.mockResolvedValue({ id: employeeId } as never);
-
-    await updateEmployeeService(employeeId, updateData);
-
-    expect(mockUpdateEmployee).toHaveBeenCalledWith(employeeId, updateData);
+    expect(result).toEqual({
+      code: "DUPLICATE_SKILL",
+      message: "スキルが重複して指定されています",
+    });
+    expect(repository.insert).not.toHaveBeenCalled();
   });
 
-  it("更新データが空の場合でも正常に動作する", async () => {
-    const emptyUpdateData = {};
-    mockUpdateEmployee.mockResolvedValue({ id: employeeId } as never);
+  it("案件履歴の日付が不正な場合、DBに保存せずに結果値を返す", async () => {
+    const result = await createEmployee(repository, queryRepository, admin, {
+      ...baseInput,
+      projects: [
+        {
+          active: false,
+          projectName: "案件A",
+          factory: "現場A",
+          skills: [],
+          startDate: "2026-02-01",
+          endDate: "2026-01-01",
+          contracts: [],
+        },
+      ],
+    });
 
-    await updateEmployeeService(employeeId, emptyUpdateData);
+    expect(result).toEqual({
+      code: "INVALID_DATE_RANGE",
+      message: "案件履歴の終了日は開始日以降である必要があります",
+    });
+    expect(repository.insert).not.toHaveBeenCalled();
+  });
 
-    expect(mockUpdateEmployee).toHaveBeenCalledWith(
-      employeeId,
-      emptyUpdateData,
+  it("社員コードの衝突時はリトライし、再取得した最新コードで採番し直して成功する", async () => {
+    repository.findLastEmployeeCode
+      .mockResolvedValueOnce("EMP001")
+      .mockResolvedValueOnce("EMP002");
+    repository.insert
+      .mockRejectedValueOnce(new DuplicateFieldError("employeeCode"))
+      .mockResolvedValueOnce(3);
+
+    const result = await createEmployee(repository, queryRepository, admin, baseInput);
+
+    expect(result).toEqual({ code: "SUCCESS", employeeId: 3, detail: savedDetail });
+    expect(repository.insert.mock.calls[1]![0].employeeCode).toBe("EMP003");
+  });
+
+  it("社員コードの衝突が上限回数を超えたら諦めて結果値を返す", async () => {
+    repository.insert.mockRejectedValue(new DuplicateFieldError("employeeCode"));
+
+    const result = await createEmployee(repository, queryRepository, admin, baseInput);
+
+    expect(result).toEqual({
+      code: "DUPLICATE_EMPLOYEE_CODE",
+      message: "社員コードが重複しました。もう一度お試しください",
+    });
+    expect(repository.insert).toHaveBeenCalledTimes(4);
+  });
+
+  it("想定外のエラーはそのまま投げる（controllerで500になる）", async () => {
+    repository.findLastEmployeeCode.mockRejectedValue(new Error("DB接続エラー"));
+
+    await expect(createEmployee(repository, queryRepository, admin, baseInput)).rejects.toThrow(
+      "DB接続エラー",
     );
   });
 });
 
-describe("getEmployeeListService", () => {
-  const expectedList = [
-    {
-      employeeId: 1,
-      employeeCode: "EMP001",
-      name: "John Doe",
-      frameworks: ["React"],
-      contractPrice: 680000,
-      status: EmployeeStatus.WORKING,
-    },
-    {
-      employeeId: 2,
-      employeeCode: "EMP002",
-      name: "Jane Smith",
-      frameworks: [],
-      contractPrice: null,
-      status: null,
-    },
-  ];
+describe("createEmployee — 保存後の読み直し", () => {
+  /** findDetailに渡した「読めるまとまり」 */
+  const requestedGroups = () => [...(queryRepository.findDetail.mock.calls[0]?.[1] ?? [])].sort();
 
-  it("社員一覧を取得する", async () => {
-    mockGetEmployeeList.mockResolvedValue(expectedList);
+  it("保存したidで、登録した人が読めるまとまりだけ読み直す（管理者は5つすべて）", async () => {
+    repository.insert.mockResolvedValue(6);
 
-    const result = await getEmployeeListService();
+    await createEmployee(repository, queryRepository, admin, baseInput);
 
-    expect(mockGetEmployeeList).toHaveBeenCalledWith(undefined);
-    expect(result).toEqual(expectedList);
+    expect(queryRepository.findDetail).toHaveBeenCalledWith(6, expect.any(Set));
+    expect(requestedGroups()).toEqual(["basic", "confidential", "contact", "projects", "public"]);
   });
 
-  it("フィルタなしで全件取得する", async () => {
-    mockGetEmployeeList.mockResolvedValue(expectedList);
+  it("システム管理者が登録した場合、機密は読み直さない（応答では機密がnullになる）", async () => {
+    repository.insert.mockResolvedValue(6);
 
-    const result = await getEmployeeListService({});
+    await createEmployee(repository, queryRepository, systemAdmin, baseInput);
 
-    expect(mockGetEmployeeList).toHaveBeenCalledWith({});
-    expect(result).toEqual(expectedList);
+    expect(requestedGroups()).toEqual(["basic", "contact", "projects", "public"]);
   });
 
-  it("社員コードでフィルタリングして取得する", async () => {
-    const filters = { employeeCode: "EMP001" };
-    mockGetEmployeeList.mockResolvedValue([expectedList[0]!]);
+  it("読み直しに失敗しても、登録は成功として返す（詳細はnull）", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    repository.insert.mockResolvedValue(6);
+    queryRepository.findDetail.mockRejectedValue(new Error("DB接続エラー"));
 
-    const result = await getEmployeeListService(filters);
+    const result = await createEmployee(repository, queryRepository, admin, baseInput);
 
-    expect(mockGetEmployeeList).toHaveBeenCalledWith(filters);
-    expect(result).toEqual([expectedList[0]]);
+    expect(result).toEqual({ code: "SUCCESS", employeeId: 6, detail: null });
+    vi.mocked(console.error).mockRestore();
   });
 
-  it("名前でフィルタリングして取得する", async () => {
-    const filters = { name: "John" };
-    mockGetEmployeeList.mockResolvedValue([expectedList[0]!]);
+  it("登録できなかった場合は読み直さない", async () => {
+    repository.insert.mockRejectedValue(new DuplicateFieldError("email"));
 
-    const result = await getEmployeeListService(filters);
+    await createEmployee(repository, queryRepository, admin, baseInput);
 
-    expect(mockGetEmployeeList).toHaveBeenCalledWith(filters);
-    expect(result).toEqual([expectedList[0]]);
+    expect(queryRepository.findDetail).not.toHaveBeenCalled();
   });
 
-  it("空の社員一覧を返す", async () => {
-    mockGetEmployeeList.mockResolvedValue([]);
+  it("権限が無い場合は読み直さない", async () => {
+    await createEmployee(repository, queryRepository, sales, baseInput);
 
-    const result = await getEmployeeListService();
-
-    expect(result).toEqual([]);
+    expect(queryRepository.findDetail).not.toHaveBeenCalled();
   });
 });
 
-describe("getEmployeeDetailsService", () => {
-  const employeeId = 1;
+describe("updateEmployee — 保存後の読み直し", () => {
+  beforeEach(() => {
+    repository.findById.mockResolvedValue(storedEmployee());
+  });
 
-  const expectedDetails = {
-    id: employeeId,
+  it("更新した社員のidで読み直して返す", async () => {
+    const result = await updateEmployee(repository, queryRepository, admin, 1, { name: "山田花子" });
+
+    expect(queryRepository.findDetail).toHaveBeenCalledWith(1, expect.any(Set));
+    expect(result).toEqual({ code: "SUCCESS", detail: savedDetail });
+  });
+
+  it("社員が見つからない場合は読み直さない", async () => {
+    repository.findById.mockResolvedValue(null);
+
+    await updateEmployee(repository, queryRepository, admin, 999, { name: "山田花子" });
+
+    expect(queryRepository.findDetail).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateEmployee", () => {
+  beforeEach(() => {
+    repository.findById.mockResolvedValue(storedEmployee());
+  });
+
+  it("DBから読み込む→変更→DBに保存する", async () => {
+    const result = await updateEmployee(repository, queryRepository, admin, 1, { name: "山田花子" });
+
+    expect(result).toEqual({ code: "SUCCESS", detail: savedDetail });
+    expect(repository.findById).toHaveBeenCalledWith(1);
+    const saved = repository.update.mock.calls[0]![0];
+    expect(saved.profile.name).toBe("山田花子");
+  });
+
+  it("読み込み後に他の更新が入っていたら、読み込み直してやり直す", async () => {
+    repository.update
+      .mockRejectedValueOnce(new ConcurrentUpdateError())
+      .mockResolvedValueOnce(undefined);
+
+    const result = await updateEmployee(repository, queryRepository, admin, 1, { name: "山田花子" });
+
+    expect(result).toEqual({ code: "SUCCESS", detail: savedDetail });
+    expect(repository.findById).toHaveBeenCalledTimes(2);
+  });
+
+  it("やり直しても衝突が続く場合、上限回数で諦めてCONFLICTを返す", async () => {
+    repository.update.mockRejectedValue(new ConcurrentUpdateError());
+
+    const result = await updateEmployee(repository, queryRepository, admin, 1, { name: "山田花子" });
+
+    expect(result).toEqual({
+      code: "CONFLICT",
+      message: "他の更新と競合しました。もう一度お試しください",
+    });
+    expect(repository.update).toHaveBeenCalledTimes(4);
+  });
+
+  it("やり直す間に社員が削除されていた場合、NOT_FOUNDを返す", async () => {
+    repository.findById
+      .mockResolvedValueOnce(storedEmployee())
+      .mockResolvedValueOnce(null);
+    repository.update.mockRejectedValueOnce(new ConcurrentUpdateError());
+
+    const result = await updateEmployee(repository, queryRepository, admin, 1, { name: "山田花子" });
+
+    expect(result).toEqual({ code: "NOT_FOUND" });
+  });
+
+  it("存在しない社員の場合、NOT_FOUNDを返し更新しない", async () => {
+    repository.findById.mockResolvedValue(null);
+
+    const result = await updateEmployee(repository, queryRepository, admin, 999, { name: "山田花子" });
+
+    expect(result).toEqual({ code: "NOT_FOUND" });
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it("前職の日付が保存済みの値と合わせて不正な場合、更新せずに結果値を返す", async () => {
+    repository.findById.mockResolvedValue(
+      Employee.reconstruct({
+        id: 1,
+        version: new Date("2026-10-01T00:00:00Z"),
+        employeeCode: "EMP001",
+        profile: {
+          name: "山田太郎",
+          specialty: "UNDECIDED",
+          workStatus: "WAITING",
+          previousCompany1StartDate: "2020-02-01",
+        },
+        skills: [],
+        projectHistories: [],
+      }),
+    );
+
+    const result = await updateEmployee(repository, queryRepository, admin, 1, {
+      previousCompany1EndDate: "2020-01-01",
+    });
+
+    expect(result).toEqual({
+      code: "INVALID_DATE_RANGE",
+      message: "前職1社目の終了日は開始日以降である必要があります",
+    });
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it("マイナンバー重複時に結果値として返す", async () => {
+    repository.update.mockRejectedValue(new DuplicateFieldError("myNumber"));
+
+    const result = await updateEmployee(repository, queryRepository, admin, 1, {
+      myNumber: "123456789012",
+    });
+
+    expect(result).toEqual({
+      code: "DUPLICATE_MY_NUMBER",
+      message: "マイナンバーが既に使用されています",
+    });
+  });
+
+  it("存在しないskillIdの場合、結果値として返す", async () => {
+    repository.update.mockRejectedValue(new InvalidSkillIdError());
+
+    const result = await updateEmployee(repository, queryRepository, admin, 1, {
+      skills: [{ skillId: 999, years: 1 }],
+    });
+
+    expect(result).toEqual({
+      code: "INVALID_SKILL_ID",
+      message: "指定されたスキルが存在しません",
+    });
+  });
+
+  it("スキルが重複している場合、DBに保存せずに結果値を返す", async () => {
+    const result = await updateEmployee(repository, queryRepository, admin, 1, {
+      skills: [
+        { skillId: 2, years: 1 },
+        { skillId: 2, years: 2 },
+      ],
+    });
+
+    expect(result).toEqual({
+      code: "DUPLICATE_SKILL",
+      message: "スキルが重複して指定されています",
+    });
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("createEmployee — 権限", () => {
+  it.each([
+    ["管理者（機密あり）", "SUCCESS", admin, { ...baseInput, myNumber: "123456789012" }],
+    ["システム管理者", "SUCCESS", systemAdmin, baseInput],
+    ["システム管理者（機密あり）", "FORBIDDEN", systemAdmin, { ...baseInput, myNumber: "123456789012" }],
+    ["営業", "FORBIDDEN", sales, baseInput],
+    ["メンター", "FORBIDDEN", mentor, baseInput],
+    ["一般社員", "FORBIDDEN", employee, baseInput],
+  ])("%s が登録すると %s", async (_, expected, actor, data) => {
+    const result = await createEmployee(repository, queryRepository, actor, data);
+
+    expect(result.code).toBe(expected);
+  });
+
+  it("権限が無い場合、DBを読む前に止める", async () => {
+    await createEmployee(repository, queryRepository, sales, baseInput);
+
+    expect(repository.findLastEmployeeCode).not.toHaveBeenCalled();
+    expect(repository.insert).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateEmployee — 権限", () => {
+  beforeEach(() => {
+    repository.findById.mockResolvedValue(storedEmployee());
+  });
+
+  it.each<[string, string, Actor, UpdateEmployeeInput]>([
+    ["管理者・機密", "SUCCESS", admin, { myNumber: "123456789012" }],
+    ["システム管理者・公開の項目", "SUCCESS", systemAdmin, { name: "山田花子" }],
+    ["システム管理者・基本情報", "SUCCESS", systemAdmin, { workStatus: "ASSIGNED" }],
+    ["システム管理者・連絡先", "SUCCESS", systemAdmin, { postalCode: "1000001" }],
+    ["システム管理者・案件履歴", "SUCCESS", systemAdmin, { projects: [] }],
+    ["システム管理者・機密", "FORBIDDEN", systemAdmin, { myNumber: "123456789012" }],
+    ["システム管理者・公開の項目と機密", "FORBIDDEN", systemAdmin, { name: "山田花子", myNumber: "123456789012" }],
+    ["営業・公開の項目", "FORBIDDEN", sales, { name: "山田花子" }],
+    ["営業・案件履歴（要確認）", "FORBIDDEN", sales, { projects: [] }],
+    ["メンター・公開の項目", "FORBIDDEN", mentor, { name: "山田花子" }],
+    ["一般社員・公開の項目（要確認）", "FORBIDDEN", employee, { name: "山田花子" }],
+    ["一般社員・基本情報（要確認）", "FORBIDDEN", employee, { workStatus: "ASSIGNED" }],
+    ["一般社員・連絡先（要確認）", "FORBIDDEN", employee, { postalCode: "1000001" }],
+  ])("%s を更新すると %s", async (_, expected, actor, data) => {
+    const result = await updateEmployee(repository, queryRepository, actor, 1, data);
+
+    expect(result.code).toBe(expected);
+  });
+
+  it("権限が無い場合、DBを読む前に止める", async () => {
+    await updateEmployee(repository, queryRepository, systemAdmin, 1, { myNumber: "123456789012" });
+
+    expect(repository.findById).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("getEmployeeDetail — 権限", () => {
+  const detail = { name: "山田太郎" } as EmployeeDetail;
+  /** 本人以外の社員のid */
+  const otherId = 9;
+
+  beforeEach(() => {
+    queryRepository.findDetail.mockResolvedValue(detail);
+  });
+
+  /** findDetailに渡した「読めるまとまり」 */
+  const requestedGroups = () => [...(queryRepository.findDetail.mock.calls[0]?.[1] ?? [])].sort();
+
+  it.each<[string, Actor, number, FieldGroup[]]>([
+    ["管理者", admin, otherId, ["basic", "confidential", "contact", "projects", "public"]],
+    ["システム管理者", systemAdmin, otherId, ["basic", "contact", "projects", "public"]],
+    ["一般社員（本人）", employee, 5, ["basic", "contact", "projects", "public"]],
+    ["一般社員（他人）は公開の項目だけ", employee, otherId, ["public"]],
+    ["メンター（他人）は公開の項目だけ", mentor, otherId, ["public"]],
+    ["社員が紐づいていないアカウントは公開の項目だけ", { userId: 6, role: "employee", employeeId: null }, otherId, ["public"]],
+  ])("%s は読めるまとまりだけをDBから読む", async (_, actor, employeeId, groups) => {
+    const result = await getEmployeeDetail(queryRepository, actor, employeeId);
+
+    expect(result).toEqual({ code: "SUCCESS", detail });
+    expect(queryRepository.findDetail).toHaveBeenCalledWith(employeeId, expect.any(Set));
+    expect(requestedGroups()).toEqual(groups);
+  });
+
+  it.each<[string, number]>([
+    ["他人", otherId],
+    ["自分", 3],
+  ])("営業は公開の項目も読めないので、%sの詳細も FORBIDDEN になり、DBを読まない", async (_, employeeId) => {
+    const result = await getEmployeeDetail(queryRepository, sales, employeeId);
+
+    expect(result.code).toBe("FORBIDDEN");
+    expect(queryRepository.findDetail).not.toHaveBeenCalled();
+  });
+
+  it("存在しない・論理削除済みの社員は NOT_FOUND", async () => {
+    queryRepository.findDetail.mockResolvedValue(null);
+
+    const result = await getEmployeeDetail(queryRepository, admin, 999);
+
+    expect(result.code).toBe("NOT_FOUND");
+  });
+});
+
+describe("getEmployeeList", () => {
+  /** 検索条件（URLのクエリをZodで検証した後の形。既定値も入る） */
+  const queryOf = (params: Record<string, string> = {}) => EmployeeListQuerySchema.parse(params);
+
+  /** findListに渡した検索条件 */
+  const conditionArg = () => queryRepository.findList.mock.calls[0]?.[0];
+
+  const item = {
+    employeeId: 1,
     employeeCode: "EMP001",
-    userId: 1,
-    name: "John Doe",
+    name: "山田太郎",
     furigana: "ヤマダタロウ",
-    email: "test@example.com",
-    birthDate: new Date("1990-01-01"),
-    gender: Gender.MALE,
-    phone: null,
-    joinDate: null,
-    trainingEndDate: null,
-    studiedFrameworks: [],
-    availableFrameworks: [],
-    previousCompany1Name: null,
-    previousCompany1StartDate: null,
-    previousCompany1EndDate: null,
-    previousCompany2Name: null,
-    previousCompany2StartDate: null,
-    previousCompany2EndDate: null,
-    previousCompany3Name: null,
-    previousCompany3StartDate: null,
-    previousCompany3EndDate: null,
-    weeklyWorkHours: null,
-    monthlyEstimatedSalary: null,
-    postalCode: null,
-    prefecture: null,
-    city: null,
-    streetAddress: null,
-    nearestStation: null,
-    emergencyContactName: null,
-    emergencyContactRelationship: null,
-    emergencyContactPhone: null,
-    hasSpouse: null,
-    hasChildren: null,
-    hasDependents: null,
-    myNumber: null,
-    employmentInsuranceNumber: null,
-    basicPensionNumber: null,
-    salaryAccount: null,
-    isDelete: false,
-    createrId: null,
-    createdAt: new Date("2026-01-01"),
-    updaterId: null,
-    updatedAt: new Date("2026-01-01"),
+    specialty: "BE" as const,
+    joinDate: "2026-04",
+    skills: ["TypeScript"],
   };
 
-  it("社員の詳細情報を取得する", async () => {
-    mockGetEmployeeDetails.mockResolvedValue(expectedDetails as never);
-
-    const result = await getEmployeeDetailsService(employeeId);
-
-    expect(mockGetEmployeeDetails).toHaveBeenCalledWith(employeeId);
-    expect(result).toEqual(expectedDetails);
+  beforeEach(() => {
+    queryRepository.findList.mockResolvedValue({ items: [item], total: 1 });
   });
 
-  it("存在しない社員IDの場合nullを返す", async () => {
-    mockGetEmployeeDetails.mockResolvedValue(null);
+  it("指定が無ければ、入社年月の新しい順・1ページ目・12件で読む", async () => {
+    await getEmployeeList(queryRepository, admin, queryOf());
 
-    const result = await getEmployeeDetailsService(1000);
+    expect(conditionArg()).toEqual({
+      employeeCode: undefined,
+      name: undefined,
+      specialty: undefined,
+      workStatus: undefined,
+      skillIds: undefined,
+      joinedMonth: undefined,
+      sort: "desc",
+      page: 1,
+      limit: 12,
+    });
+  });
 
-    expect(result).toBeNull();
+  it("クエリの名前を検索条件の名前に置き換え、スキルIDは数値の配列にする", async () => {
+    await getEmployeeList(
+      queryRepository,
+      admin,
+      queryOf({
+        employeeCode: "EMP",
+        name: "やまだ",
+        specialtyFilter: "FE",
+        workStatusFilter: "WAITING",
+        skillsFilter: "3,12",
+        sort: "asc",
+        page: "2",
+        limit: "20",
+      }),
+    );
+
+    expect(conditionArg()).toMatchObject({
+      employeeCode: "EMP",
+      name: "やまだ",
+      specialty: "FE",
+      workStatus: "WAITING",
+      skillIds: [3, 12],
+      sort: "asc",
+      page: 2,
+      limit: 20,
+    });
+  });
+
+  it("ページ情報を付けて返す（該当25件・12件ずつなら3ページ）", async () => {
+    queryRepository.findList.mockResolvedValue({ items: [item], total: 25 });
+
+    const result = await getEmployeeList(queryRepository, admin, queryOf({ page: "3" }));
+
+    expect(result).toEqual({
+      code: "SUCCESS",
+      page: { items: [item], total: 25, currentPage: 3, totalPage: 3 },
+    });
+  });
+
+  it("件数とページがずれても（最後のページより後を指定しても）エラーにせず、空の一覧を返す", async () => {
+    queryRepository.findList.mockResolvedValue({ items: [], total: 13 });
+
+    const result = await getEmployeeList(queryRepository, admin, queryOf({ page: "3" }));
+
+    expect(result).toEqual({
+      code: "SUCCESS",
+      page: { items: [], total: 13, currentPage: 3, totalPage: 2 },
+    });
+  });
+
+  it("該当が0件でも総ページ数は1", async () => {
+    queryRepository.findList.mockResolvedValue({ items: [], total: 0 });
+
+    const result = await getEmployeeList(queryRepository, admin, queryOf());
+
+    expect(result).toEqual({
+      code: "SUCCESS",
+      page: { items: [], total: 0, currentPage: 1, totalPage: 1 },
+    });
+  });
+
+  it.each([
+    ["日本時間で月の初日の0時（UTCではまだ前月）", "2026-11-30T15:00:00Z", "2026-12"],
+    ["日本時間で月末の23時59分", "2026-11-30T14:59:00Z", "2026-11"],
+  ])("今月入社（monthly=true）は、%sでも日本時間の月で絞り込む", async (_, now, month) => {
+    await getEmployeeList(queryRepository, admin, queryOf({ monthly: "true" }), new Date(now));
+
+    expect(conditionArg()?.joinedMonth).toBe(month);
+  });
+
+  it("monthly=falseなら入社月で絞り込まない", async () => {
+    await getEmployeeList(queryRepository, admin, queryOf({ monthly: "false" }));
+
+    expect(conditionArg()?.joinedMonth).toBeUndefined();
+  });
+
+  it.each<[string, Actor]>([
+    ["システム管理者", systemAdmin],
+    ["メンター", mentor],
+    ["一般社員", employee],
+  ])("%s も一覧を見られる", async (_, actor) => {
+    const result = await getEmployeeList(queryRepository, actor, queryOf());
+
+    expect(result.code).toBe("SUCCESS");
+  });
+
+  it("営業は公開の項目も読めないので FORBIDDEN になり、DBを読まない", async () => {
+    const result = await getEmployeeList(queryRepository, sales, queryOf());
+
+    expect(result.code).toBe("FORBIDDEN");
+    expect(queryRepository.findList).not.toHaveBeenCalled();
+  });
+
+  it.each<[string, string, Actor]>([
+    ["管理者", "SUCCESS", admin],
+    ["システム管理者", "SUCCESS", systemAdmin],
+    ["メンター", "FORBIDDEN", mentor],
+    ["一般社員", "FORBIDDEN", employee],
+  ])("稼働ステータスでの絞り込みは、%s なら %s（稼働状況は公開していないため）", async (_, expected, actor) => {
+    const result = await getEmployeeList(queryRepository, actor, queryOf({ workStatusFilter: "WAITING" }));
+
+    expect(result.code).toBe(expected);
   });
 });

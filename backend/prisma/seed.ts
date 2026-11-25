@@ -3,6 +3,7 @@ import {
   Gender,
   EmployeeStatus,
   SettlementUnit,
+  SkillCategory,
 } from "@prisma/client";
 import { ROLES, ROLE_ID } from "../src/constants/roles";
 
@@ -17,6 +18,29 @@ async function main() {
       update: {},
       create: role,
     });
+  }
+
+  // ----------------------
+  // Skill（マスタデータ。名前で重複しないようにupsert）
+  // ----------------------
+  const skillMaster = [
+    { name: "TypeScript", category: SkillCategory.LANGUAGE },
+    { name: "Java", category: SkillCategory.LANGUAGE },
+    { name: "Python", category: SkillCategory.LANGUAGE },
+    { name: "React", category: SkillCategory.LIBRARY },
+    { name: "Next.js", category: SkillCategory.FRAMEWORK },
+    { name: "Spring Boot", category: SkillCategory.FRAMEWORK },
+    { name: "AWS", category: SkillCategory.CLOUD },
+    { name: "Docker", category: SkillCategory.OTHER },
+  ];
+  const skillId: Record<string, number> = {};
+  for (const skill of skillMaster) {
+    const row = await prisma.skill.upsert({
+      where: { name: skill.name },
+      update: {},
+      create: skill,
+    });
+    skillId[skill.name] = row.id;
   }
 
   // ----------------------
@@ -54,21 +78,18 @@ async function main() {
     },
   });
 
-  // ----------------------
-  // Framework
-  // ----------------------
-  const react = await prisma.framework.create({
-    data: { frameworkName: "React" },
-  });
-
-  const node = await prisma.framework.create({
-    data: { frameworkName: "Node.js" },
+  const user5 = await prisma.user.create({
+    data: {
+      email: "sysadmin@test.com",
+      firebaseUid: "sysadmin-firebase-uid",
+      roleId: ROLE_ID.system_admin,
+    },
   });
 
   // ----------------------
   // Employee
   // ----------------------
-  const employee1 = await prisma.employee.create({
+  await prisma.employee.create({
     data: {
       employeeCode: "EMP001",
       userId: user1.id,
@@ -78,13 +99,23 @@ async function main() {
     },
   });
 
-  const employee2 = await prisma.employee.create({
+  await prisma.employee.create({
     data: {
       employeeCode: "EMP002",
       userId: user2.id,
       name: "佐藤花子",
       gender: Gender.FEMALE,
       birthDate: new Date("1995-05-10"),
+    },
+  });
+
+  await prisma.employee.create({
+    data: {
+      employeeCode: "EMP003",
+      userId: user5.id,
+      name: "高橋次郎",
+      gender: Gender.MALE,
+      birthDate: new Date("1985-11-03"),
     },
   });
 
@@ -130,13 +161,6 @@ async function main() {
       previousCompany1Name: "前職A",
       previousCompany1StartDate: new Date("2015-04-01"),
       previousCompany1EndDate: new Date("2019-12-31"),
-
-      studiedFrameworks: {
-        create: [{ frameworkId: react.id }],
-      },
-      availableFrameworks: {
-        create: [{ frameworkId: node.id }],
-      },
     },
   });
 
@@ -179,37 +203,75 @@ async function main() {
       previousCompany1Name: "前職B",
       previousCompany1StartDate: new Date("2018-04-01"),
       previousCompany1EndDate: new Date("2020-12-31"),
-
-      studiedFrameworks: {
-        create: [{ frameworkId: node.id }],
-      },
-      availableFrameworks: {
-        create: [{ frameworkId: react.id }],
-      },
     },
   });
 
   // ----------------------
-  // Employee × Framework
+  // EmployeeSkill（保有スキル）
   // ----------------------
-  await prisma.employeeStudiedFramework.createMany({
+  await prisma.employeeSkill.createMany({
     data: [
-      { employeeId: employee1.id, frameworkId: react.id },
-      { employeeId: employee1.id, frameworkId: node.id },
+      { employeeId: employeeFull1.id, skillId: skillId["Java"], years: 5 },
+      { employeeId: employeeFull1.id, skillId: skillId["Spring Boot"], years: 3.5 },
+      { employeeId: employeeFull1.id, skillId: skillId["AWS"], years: 1 },
+      { employeeId: employeeFull2.id, skillId: skillId["TypeScript"], years: 3 },
+      { employeeId: employeeFull2.id, skillId: skillId["React"], years: 2.5 },
     ],
   });
 
-  await prisma.employeeAvailableFramework.create({
+  // ----------------------
+  // EmployeeProjectHistory（案件履歴＋使用スキル＋契約単価の履歴）
+  // ----------------------
+  await prisma.employeeProjectHistory.create({
     data: {
-      employeeId: employee2.id,
-      frameworkId: react.id,
+      employeeId: employeeFull1.id,
+      active: false,
+      projectName: "在庫管理システム保守",
+      factory: "DEF物流株式会社",
+      startDate: new Date("2023-04-01"),
+      endDate: new Date("2025-03-31"),
+      skills: { create: [{ skillId: skillId["Java"] }] },
+      contracts: { create: [{ startDate: new Date("2023-04-01"), unitPrice: 600000 }] },
+    },
+  });
+
+  await prisma.employeeProjectHistory.create({
+    data: {
+      employeeId: employeeFull1.id,
+      active: true,
+      projectName: "金融システム開発",
+      factory: "XYZ銀行",
+      startDate: new Date("2025-04-01"),
+      skills: {
+        create: [{ skillId: skillId["Java"] }, { skillId: skillId["Spring Boot"] }],
+      },
+      contracts: {
+        create: [
+          { startDate: new Date("2025-04-01"), unitPrice: 650000 },
+          { startDate: new Date("2025-10-01"), unitPrice: 680000 },
+        ],
+      },
+    },
+  });
+
+  await prisma.employeeProjectHistory.create({
+    data: {
+      employeeId: employeeFull2.id,
+      active: true,
+      projectName: "ECサイトリニューアル",
+      factory: "EC株式会社",
+      startDate: new Date("2026-01-01"),
+      skills: {
+        create: [{ skillId: skillId["TypeScript"] }, { skillId: skillId["React"] }],
+      },
+      contracts: { create: [{ startDate: new Date("2026-01-01") }] },
     },
   });
 
   // ----------------------
   // Project
   // ----------------------
-  const project = await prisma.project.create({
+  await prisma.project.create({
     data: {
       name: "ECサイト開発",
       clientCompanyName: "ABC株式会社",
@@ -281,16 +343,6 @@ async function main() {
   });
 
   // ----------------------
-  // Project × Framework
-  // ----------------------
-  await prisma.projectFramework.create({
-    data: {
-      projectId: project.id,
-      frameworkId: react.id,
-    },
-  });
-
-  // ----------------------
   // ProjectAssignment
   // ----------------------
   const assignment1 = await prisma.projectAssignment.create({
@@ -314,17 +366,6 @@ async function main() {
       startDate: new Date("2026-01-01"),
       contractPrice: 700000,
     },
-  });
-
-  // ----------------------
-  // ProjectAssignment × Framework
-  // ----------------------
-  await prisma.projectAssignmentFramework.createMany({
-    data: [
-      { projectAssignmentId: assignment1.id, frameworkId: react.id },
-      { projectAssignmentId: assignment1.id, frameworkId: node.id },
-      { projectAssignmentId: assignment2.id, frameworkId: node.id },
-    ],
   });
 
   // ----------------------

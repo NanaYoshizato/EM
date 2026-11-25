@@ -22,6 +22,28 @@ enum EmployeeStatus {
   LEAVE
 }
 
+enum Specialty {
+  FE
+  BE
+  UNDECIDED
+}
+
+enum WorkStatus {
+  ASSIGNED
+  WAITING
+  TRAINING
+  IN_OFFICE
+  CONTRACT_ENDED
+}
+
+enum SkillCategory {
+  LANGUAGE
+  LIBRARY
+  FRAMEWORK
+  CLOUD
+  OTHER
+}
+
 enum SettlementUnit {
   MIN_1
   MIN_10
@@ -31,21 +53,21 @@ enum SettlementUnit {
 }
 
 model User {
-  id          Int       @id @default(autoincrement())
-  email       String    @unique
-  firebaseUid String    @unique @map("firebase_uid")
+  id          Int    @id @default(autoincrement())
+  email       String @unique
+  firebaseUid String @unique @map("firebase_uid")
 
-  roleId      Int       @default(5) @map("role_id")
-  role        Role      @relation(fields: [roleId], references: [id])
+  roleId Int  @default(5) @map("role_id")
+  role   Role @relation(fields: [roleId], references: [id])
 
-  isDelete    Boolean   @default(false) @map("is_delete")
-  createrId   String?   @map("creater_id")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updaterId   String?   @map("updater_id")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  isDelete  Boolean  @default(false) @map("is_delete")
+  createrId String?  @map("creater_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updaterId String?  @map("updater_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  employee     Employee?
-  assignments  ProjectAssignment[]
+  employee    Employee?
+  assignments ProjectAssignment[]
 
   @@map("user")
 }
@@ -67,213 +89,140 @@ model Role {
   @@map("role")
 }
 
+// 社員
 model Employee {
-  id                        Int                    @id @default(autoincrement())
-  employeeCode              String                 @unique @map("employee_code")
-  userId                    Int                 @unique @map("user_id")
-  user                      User?                  @relation(fields: [userId], references: [id])
+  id           Int    @id @default(autoincrement())
+  employeeCode String @unique @map("employee_code")
+  userId       Int?   @unique @map("user_id")
+  user         User?  @relation(fields: [userId], references: [id])
 
-  name                      String                 @map("name")
-  furigana                  String?                @map("furigana")
-  email                     String?                @map("email")
-  birthDate                 DateTime?              @map("birth_date")
-  gender                    Gender?                 @map("gender")
-  phone                     String?                @map("phone")
+  name      String    @map("name") @db.VarChar(50)
+  furigana  String?   @map("furigana") @db.VarChar(50)
+  email     String?   @unique @map("email")
+  birthDate DateTime? @map("birth_date")
+  gender    Gender?   @map("gender")
+  phone     String?   @map("phone")
 
-  joinDate                  DateTime?              @map("join_date")
-  trainingEndDate           DateTime?              @map("training_end_date")
-  studiedFrameworks         EmployeeStudiedFramework[]
-  availableFrameworks       EmployeeAvailableFramework[]
+  joinDate         DateTime?                @map("join_date")
+  specialty        Specialty                @default(UNDECIDED) @map("specialty")
+  workStatus       WorkStatus               @default(WAITING) @map("work_status")
+  gitHub           String?                  @map("git_hub") @db.VarChar(39)
+  trainingEndDate  DateTime?                @map("training_end_date")
+  employeeSkills   EmployeeSkill[]
+  projectHistories EmployeeProjectHistory[]
 
-  previousCompany1Name      String?                @map("previous_company1_name")  // 前職の情報
-  previousCompany1StartDate DateTime?              @map("previous_company1_start_date")
-  previousCompany1EndDate   DateTime?              @map("previous_company1_end_date")
-  previousCompany2Name      String?                @map("previous_company2_name")
-  previousCompany2StartDate DateTime?              @map("previous_company2_start_date")
-  previousCompany2EndDate   DateTime?              @map("previous_company2_end_date")
-  previousCompany3Name      String?                @map("previous_company3_name")
-  previousCompany3StartDate DateTime?              @map("previous_company3_start_date")
-  previousCompany3EndDate   DateTime?              @map("previous_company3_end_date")
+  previousCompany1Name      String?   @map("previous_company1_name") @db.VarChar(100) // 前職の情報
+  previousCompany1StartDate DateTime? @map("previous_company1_start_date")
+  previousCompany1EndDate   DateTime? @map("previous_company1_end_date")
+  previousCompany2Name      String?   @map("previous_company2_name") @db.VarChar(100)
+  previousCompany2StartDate DateTime? @map("previous_company2_start_date")
+  previousCompany2EndDate   DateTime? @map("previous_company2_end_date")
+  previousCompany3Name      String?   @map("previous_company3_name") @db.VarChar(100)
+  previousCompany3StartDate DateTime? @map("previous_company3_start_date")
+  previousCompany3EndDate   DateTime? @map("previous_company3_end_date")
 
-  weeklyWorkHours           String?                @map("weekly_work_hours")
-  monthlyEstimatedSalary    Int?                   @map("monthly_estimated_salary")
+  weeklyWorkHours        String? @map("weekly_work_hours") @db.VarChar(20)
+  monthlyEstimatedSalary Int?    @map("monthly_estimated_salary")
 
-  postalCode                String?                @map("postal_code")
-  prefecture                String?                @map("prefecture")
-  city                      String?                @map("city")
-  streetAddress             String?                @map("street_address")
-  nearestStation            String?                @map("nearest_station")
+  postalCode     String? @map("postal_code")
+  prefecture     String? @map("prefecture") @db.VarChar(10)
+  city           String? @map("city") @db.VarChar(100)
+  streetAddress  String? @map("street_address") @db.VarChar(100)
+  nearestStation String? @map("nearest_station")
 
-  emergencyContactName         String?             @map("emergency_contact_name")  // 緊急連絡先
-  emergencyContactRelationship String?             @map("emergency_contact_relationship")
-  emergencyContactPhone        String?             @map("emergency_contact_phone")
+  emergencyContactName         String? @map("emergency_contact_name") @db.VarChar(50) // 緊急連絡先
+  emergencyContactRelationship String? @map("emergency_contact_relationship") @db.VarChar(20)
+  emergencyContactPhone        String? @map("emergency_contact_phone")
 
-  hasSpouse                 Boolean?                @map("has_spouse")
-  hasChildren               Boolean?                @map("has_children")
-  hasDependents             Boolean?                @map("has_dependents")
+  hasSpouse     Boolean? @map("has_spouse")
+  hasChildren   Boolean? @map("has_children")
+  hasDependents Boolean? @map("has_dependents")
 
-  myNumber                  String?                @unique @map("my_number")
-  employmentInsuranceNumber String?                @map("employment_insurance_number")
-  basicPensionNumber        String?                @map("basic_pension_number")
-  salaryAccount             String?                @map("salary_account")
+  myNumber                  String? @unique @map("my_number")
+  employmentInsuranceNumber String? @map("employment_insurance_number")
+  basicPensionNumber        String? @map("basic_pension_number")
+  salaryAccount             String? @map("salary_account") @db.VarChar(100)
 
-  assignments               ProjectAssignment[]
+  assignments ProjectAssignment[]
 
-  isDelete                  Boolean                @default(false) @map("is_delete")
-  createrId                 String?                @map("creater_id")
-  createdAt                 DateTime               @default(now()) @map("created_at")
-  updaterId                 String?                @map("updater_id")
-  updatedAt                 DateTime               @updatedAt @map("updated_at")
+  isDelete  Boolean  @default(false) @map("is_delete")
+  createrId String?  @map("creater_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updaterId String?  @map("updater_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([name])
   @@index([employeeCode])
   @@map("employee")
 }
 
-model Framework {
-  id            Int                        @id @default(autoincrement())
-  frameworkName String                     @unique @map("framework_name")
-
-  isDelete      Boolean                    @default(false) @map("is_delete")
-  createrId     String?                    @map("creater_id")
-  createdAt     DateTime                   @default(now()) @map("created_at")
-  updaterId     String?                    @map("updater_id")
-  updatedAt     DateTime                   @updatedAt @map("updated_at")
-
-  studiedBy         EmployeeStudiedFramework[]
-  availableBy       EmployeeAvailableFramework[]
-  projectFrameworks ProjectFramework[]
-  assignmentFrameworks ProjectAssignmentFramework[]
-
-  @@map("framework")
-}
-
-// 研修中言語
-model EmployeeStudiedFramework {
-  id           Int        @id @default(autoincrement())
-  employeeId   Int        @map("employee_id")
-  frameworkId  Int        @map("framework_id")
-
-  employee     Employee   @relation(fields: [employeeId], references: [id])
-  framework    Framework  @relation(fields: [frameworkId], references: [id])
-
-  isDelete     Boolean    @default(false) @map("is_delete")
-  createrId    String?    @map("creater_id")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updaterId    String?    @map("updater_id")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
-
-  @@unique([employeeId, frameworkId])
-  @@map("employee_studied_framework")
-}
-
-// 利用可能言語
-model EmployeeAvailableFramework {
-  id           Int        @id @default(autoincrement())
-  employeeId   Int     @map("employee_id")
-  frameworkId  Int     @map("framework_id")
-
-  employee     Employee   @relation(fields: [employeeId], references: [id])
-  framework    Framework  @relation(fields: [frameworkId], references: [id])
-
-  isDelete     Boolean    @default(false) @map("is_delete")
-  createrId    String?    @map("creater_id")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updaterId    String?    @map("updater_id")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
-
-  @@unique([employeeId, frameworkId])
-  @@map("employee_available_framework")
-}
-
 // 案件
 model Project {
-  id                Int                      @id @default(autoincrement())
-  name              String                   @map("name")
-  clientCompanyName String?                  @map("client_company_name")
-  clientAddress     String?                  @map("client_address")
+  id                Int     @id @default(autoincrement())
+  name              String  @map("name")
+  clientCompanyName String? @map("client_company_name")
+  clientAddress     String? @map("client_address")
 
-  startDate         DateTime?                @map("start_date")
-  endDate           DateTime?                @map("end_date")
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
 
-  minWorkHours      Int?                     @map("min_work_hours")
-  maxWorkHours      Int?                     @map("max_work_hours")
+  minWorkHours Int? @map("min_work_hours")
+  maxWorkHours Int? @map("max_work_hours")
 
-  excessUnitPrice    Int?                    @map("excess_unit_price") // 超過単価
-  deductionUnitPrice Int?                    @map("deduction_unit_price") // 控除単価
+  excessUnitPrice    Int? @map("excess_unit_price") // 超過単価
+  deductionUnitPrice Int? @map("deduction_unit_price") // 控除単価
 
-  settlementUnit    SettlementUnit?          @map("settlement_unit")
+  settlementUnit SettlementUnit? @map("settlement_unit")
 
-  minPrice          Int?                     @map("min_price")
-  maxPrice          Int?                     @map("max_price")
+  minPrice Int? @map("min_price")
+  maxPrice Int? @map("max_price")
 
-  workStyle         String?                  @map("work_style")
-  nearestStation    String?                  @map("nearest_station")
+  workStyle      String? @map("work_style")
+  nearestStation String? @map("nearest_station")
 
-  remarks           String?                  @map("remarks")
+  remarks String? @map("remarks")
 
-  isDelete          Boolean                  @default(false) @map("is_delete")
-  createrId         String?                  @map("creater_id")
-  createdAt         DateTime                 @default(now()) @map("created_at")
-  updaterId         String?                  @map("updater_id")
-  updatedAt         DateTime                 @updatedAt @map("updated_at")
+  isDelete  Boolean  @default(false) @map("is_delete")
+  createrId String?  @map("creater_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updaterId String?  @map("updater_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  assignments       ProjectAssignment[]
-  framework         ProjectFramework[]
+  assignments ProjectAssignment[]
 
   @@map("project")
 }
 
-// 案件 × 言語
-model ProjectFramework {
-  id                 Int       @id @default(autoincrement())
-  projectId          Int    @map("project_id")
-  frameworkId        Int    @map("framework_id")
-
-  project            Project   @relation(fields: [projectId], references: [id])
-  framework          Framework @relation(fields: [frameworkId], references: [id])
-
-  isDelete           Boolean   @default(false) @map("is_delete")
-  createrId          String?   @map("creater_id")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updaterId          String?   @map("updater_id")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
-
-  @@unique([projectId, frameworkId])
-  @@map("project_framework")
-}
-
 // 案件 × 社員
 model ProjectAssignment {
-  id                  Int              @id @default(autoincrement())
-  projectId           Int              @map("project_id")
-  employeeId          Int              @map("employee_id")
+  id         Int @id @default(autoincrement())
+  projectId  Int @map("project_id")
+  employeeId Int @map("employee_id")
 
-  project             Project          @relation(fields: [projectId], references: [id])
-  employee            Employee         @relation(fields: [employeeId], references: [id])
+  project  Project  @relation(fields: [projectId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
 
-  status              EmployeeStatus
+  status EmployeeStatus
 
-  startDate           DateTime?        @map("start_date")
-  endDate             DateTime?        @map("end_date")
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
 
-  contractPrice       Int?             @map("contract_price") // 契約単価（最新の単価。履歴はcontractsを参照）
-  excessUnitPrice     Int?             @map("excess_unit_price") // 超過単価
-  deductionUnitPrice  Int?             @map("deduction_unit_price") // 控除単価
+  contractPrice      Int? @map("contract_price") // 契約単価（最新の単価。履歴はcontractsを参照）
+  excessUnitPrice    Int? @map("excess_unit_price") // 超過単価
+  deductionUnitPrice Int? @map("deduction_unit_price") // 控除単価
 
-  remarks             String?          @map("remarks")
+  remarks String? @map("remarks")
 
-  mentorId            Int?             @map("mentor_id")
-  mentor              User?            @relation(fields: [mentorId], references: [id])
+  mentorId Int?  @map("mentor_id")
+  mentor   User? @relation(fields: [mentorId], references: [id])
 
-  frameworks          ProjectAssignmentFramework[]
-  contracts           ProjectAssignmentContract[]
+  contracts ProjectAssignmentContract[]
 
-  isDelete            Boolean          @default(false) @map("is_delete")
-  createrId           String?          @map("creater_id")
-  createdAt           DateTime         @default(now()) @map("created_at")
-  updaterId           String?          @map("updater_id")
-  updatedAt           DateTime         @updatedAt @map("updated_at")
+  isDelete  Boolean  @default(false) @map("is_delete")
+  createrId String?  @map("creater_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updaterId String?  @map("updater_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([projectId, employeeId])
   @@index([status])
@@ -282,39 +231,120 @@ model ProjectAssignment {
 
 // 案件アサインの単価改定履歴（フロントの案件履歴画面がcontracts[]として複数件保持する前提に合わせた構造）
 model ProjectAssignmentContract {
-  id                  Int                @id @default(autoincrement())
-  projectAssignmentId Int                @map("project_assignment_id")
+  id                  Int @id @default(autoincrement())
+  projectAssignmentId Int @map("project_assignment_id")
 
-  projectAssignment   ProjectAssignment  @relation(fields: [projectAssignmentId], references: [id])
+  projectAssignment ProjectAssignment @relation(fields: [projectAssignmentId], references: [id])
 
-  startDate           DateTime           @map("start_date") // この単価の適用開始日
-  unitPrice           Int                @map("unit_price")
+  startDate DateTime @map("start_date") // この単価の適用開始日
+  unitPrice Int      @map("unit_price")
 
-  isDelete            Boolean            @default(false) @map("is_delete")
-  createrId           String?            @map("creater_id")
-  createdAt           DateTime           @default(now()) @map("created_at")
-  updaterId           String?            @map("updater_id")
-  updatedAt           DateTime           @updatedAt @map("updated_at")
+  isDelete  Boolean  @default(false) @map("is_delete")
+  createrId String?  @map("creater_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updaterId String?  @map("updater_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([projectAssignmentId])
   @@map("project_assignment_contract")
 }
 
-// 案件アサイン × 言語 (社員がその案件で使う言語)
-model ProjectAssignmentFramework {
-  id                  Int                @id @default(autoincrement())
-  projectAssignmentId Int                @map("project_assignment_id")
-  frameworkId         Int                @map("framework_id")
+// スキル(スキル選択肢一覧取得で使用)
+model Skill {
+  id       Int           @id @default(autoincrement())
+  name     String        @unique @map("name")
+  category SkillCategory @map("category")
 
-  projectAssignment   ProjectAssignment  @relation(fields: [projectAssignmentId], references: [id])
-  framework           Framework          @relation(fields: [frameworkId], references: [id])
+  isDelete  Boolean  @default(false) @map("is_delete")
+  createrId String?  @map("creater_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updaterId String?  @map("updater_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  isDelete            Boolean            @default(false) @map("is_delete")
-  createrId           String?            @map("creater_id")
-  createdAt           DateTime           @default(now()) @map("created_at")
-  updaterId           String?            @map("updater_id")
-  updatedAt           DateTime           @updatedAt @map("updated_at")
+  employeeSkills       EmployeeSkill[]
+  projectHistorySkills EmployeeProjectHistorySkill[]
 
-  @@unique([projectAssignmentId, frameworkId])
-  @@map("project_assignment_framework")
+  @@map("skill")
+}
+
+// スキル × 社員
+model EmployeeSkill {
+  id         Int   @id @default(autoincrement())
+  employeeId Int   @map("employee_id")
+  skillId    Int   @map("skill_id")
+  ///経験年数
+  years      Float @map("years")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  skill    Skill    @relation(fields: [skillId], references: [id])
+
+  ///削除フラグ
+  isDelete  Boolean  @default(false) @map("is_delete")
+  createrId String?  @map("creater_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updaterId String?  @map("updater_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([employeeId, skillId])
+  @@map("employee_skill")
+}
+
+// 案件履歴
+model EmployeeProjectHistory {
+  id          Int       @id @default(autoincrement())
+  employeeId  Int       @map("employee_id")
+  active      Boolean   @map("active")
+  projectName String    @map("project_name") @db.VarChar(100)
+  factory     String    @map("factory") @db.VarChar(100)
+  startDate   DateTime  @map("start_date")
+  endDate     DateTime? @map("end_date")
+
+  employee  Employee                      @relation(fields: [employeeId], references: [id])
+  skills    EmployeeProjectHistorySkill[]
+  contracts EmployeeProjectContract[]
+
+  isDelete  Boolean  @default(false) @map("is_delete")
+  createrId String?  @map("creater_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updaterId String?  @map("updater_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("employee_project_history")
+}
+
+// 社員履歴 × スキル
+model EmployeeProjectHistorySkill {
+  id               Int @id @default(autoincrement())
+  projectHistoryId Int @map("project_history_id")
+  skillId          Int @map("skill_id")
+
+  projectHistory EmployeeProjectHistory @relation(fields: [projectHistoryId], references: [id])
+  skill          Skill                  @relation(fields: [skillId], references: [id])
+
+  isDelete  Boolean  @default(false) @map("is_delete")
+  createrId String?  @map("creater_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updaterId String?  @map("updater_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([projectHistoryId, skillId])
+  @@map("employee_project_history_skill")
+}
+
+// 社員履歴 × 単価履歴
+model EmployeeProjectContract {
+  id               Int      @id @default(autoincrement())
+  projectHistoryId Int      @map("project_history_id")
+  startDate        DateTime @map("start_date")
+  unitPrice        Int?     @map("unit_price")
+
+  projectHistory EmployeeProjectHistory @relation(fields: [projectHistoryId], references: [id])
+
+  isDelete  Boolean  @default(false) @map("is_delete")
+  createrId String?  @map("creater_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updaterId String?  @map("updater_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("employee_project_contract")
 }

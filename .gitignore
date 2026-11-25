@@ -3,6 +3,9 @@
 /.next
 /next-env.d.ts
 /.agents
+.claude
+preflight.md
 /docs
 firebase-debug.log*
+emulator_data/
 *.log

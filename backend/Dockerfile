@@ -26,4 +26,5 @@ EXPOSE 3001
 ENV PORT=3001
 
 # アプリケーションの起動コマンド
-CMD ["sh", "-c", "pnpm prisma migrate deploy && pnpm dev"]
+# 開発時はnode_modulesを別ボリュームに置くため、起動のたびにPrisma Clientを作り直してschema.prismaの変更を反映する
+CMD ["sh", "-c", "pnpm prisma generate && pnpm prisma migrate deploy && pnpm dev"]
