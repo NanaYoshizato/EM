@@ -1,21 +1,19 @@
 import { z } from "zod";
-import { Gender, EmployeeStatus, Specialty, WorkStatus } from "@prisma/client";
+import { freeText, gitHubUsername, personName } from "@/lib/textSchema";
+import { Gender, Specialty, WorkStatus } from "@prisma/client";
+import { ROLE_NAMES } from "@/constants/roles";
 
 export const createEmployeeSchema = z.object({
   /* メールアドレス */
   email: z.email(),
 
   /* 氏名 */
-  name: z
-    .string()
-    .trim()
+  name: personName()
     .min(1)
     .max(50),
 
   /* フリガナ */
-  furigana: z
-    .string()
-    .trim()
+  furigana: personName()
     .min(1)
     .max(50),
 
@@ -44,19 +42,14 @@ export const createEmployeeSchema = z.object({
   workStatus: z.enum(WorkStatus),
 
   /* GitHubユーザー名 */
-  gitHub: z
-    .string()
-    .trim()
-    .max(39)
+  gitHub: gitHubUsername()
     .optional(),
 
   /* 研修終了日 */
   trainingEndDate: z.iso.date().optional(),
 
   /* 前職1社目の会社名 */
-  previousCompany1Name: z
-    .string()
-    .trim()
+  previousCompany1Name: freeText()
     .max(100)
     .optional(),
 
@@ -67,9 +60,7 @@ export const createEmployeeSchema = z.object({
   previousCompany1EndDate: z.iso.date().optional(),
 
   /* 前職2社目の会社名 */
-  previousCompany2Name: z
-    .string()
-    .trim()
+  previousCompany2Name: freeText()
     .max(100)
     .optional(),
 
@@ -80,9 +71,7 @@ export const createEmployeeSchema = z.object({
   previousCompany2EndDate: z.iso.date().optional(),
 
   /* 前職3社目の会社名 */
-  previousCompany3Name: z
-    .string()
-    .trim()
+  previousCompany3Name: freeText()
     .max(100)
     .optional(),
 
@@ -93,9 +82,7 @@ export const createEmployeeSchema = z.object({
   previousCompany3EndDate: z.iso.date().optional(),
 
   /* 週あたり稼働時間 */
-  weeklyWorkHours: z
-    .string()
-    .trim()
+  weeklyWorkHours: freeText()
     .max(20)
     .optional(),
 
@@ -113,37 +100,27 @@ export const createEmployeeSchema = z.object({
     .optional(),
 
   /* 都道府県 */
-  prefecture: z
-    .string()
-    .trim()
+  prefecture: freeText()
     .max(10)
     .optional(),
 
   /* 市区町村 */
-  city: z
-    .string()
-    .trim()
+  city: freeText()
     .max(100)
     .optional(),
 
   /* 番地・建物名 */
-  streetAddress: z
-    .string()
-    .trim()
+  streetAddress: freeText()
     .max(100)
     .optional(),
 
   /* 緊急連絡先氏名 */
-  emergencyContactName: z
-    .string()
-    .trim()
+  emergencyContactName: personName()
     .max(50)
     .optional(),
 
   /* 緊急連絡先続柄 */
-  emergencyContactRelationship: z
-    .string()
-    .trim()
+  emergencyContactRelationship: freeText()
     .max(20)
     .optional(),
 
@@ -181,9 +158,7 @@ export const createEmployeeSchema = z.object({
     .optional(),
 
   /* 給与振込口座 */
-  salaryAccount: z
-    .string()
-    .trim()
+  salaryAccount: freeText()
     .max(100)
     .optional(),
 
@@ -210,16 +185,12 @@ export const createEmployeeSchema = z.object({
         active: z.boolean(),
 
         /* 案件名 */
-        projectName: z
-          .string()
-          .trim()
+        projectName: freeText()
           .min(1)
           .max(100),
 
         /* 常駐先企業名 */
-        factory: z
-          .string()
-          .trim()
+        factory: freeText()
           .min(1)
           .max(100),
 
@@ -262,17 +233,13 @@ export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 
 export const updateEmployeeSchema = z.object({
   /* 氏名 */
-  name: z
-    .string()
-    .trim()
+  name: personName()
     .min(1)
     .max(50)
     .optional(),
 
   /* フリガナ */
-  furigana: z
-    .string()
-    .trim()
+  furigana: personName()
     .min(1)
     .max(50)
     .optional(),
@@ -302,19 +269,14 @@ export const updateEmployeeSchema = z.object({
   workStatus: z.enum(WorkStatus).optional(),
 
   /* GitHubユーザー名 */
-  gitHub: z
-    .string()
-    .trim()
-    .max(39)
+  gitHub: gitHubUsername()
     .optional(),
 
   /* 研修終了日 */
   trainingEndDate: z.iso.date().optional(),
 
   /* 前職1社目の会社名 */
-  previousCompany1Name: z
-    .string()
-    .trim()
+  previousCompany1Name: freeText()
     .max(100)
     .optional(),
 
@@ -325,9 +287,7 @@ export const updateEmployeeSchema = z.object({
   previousCompany1EndDate: z.iso.date().optional(),
 
   /* 前職2社目の会社名 */
-  previousCompany2Name: z
-    .string()
-    .trim()
+  previousCompany2Name: freeText()
     .max(100)
     .optional(),
 
@@ -338,9 +298,7 @@ export const updateEmployeeSchema = z.object({
   previousCompany2EndDate: z.iso.date().optional(),
 
   /* 前職3社目の会社名 */
-  previousCompany3Name: z
-    .string()
-    .trim()
+  previousCompany3Name: freeText()
     .max(100)
     .optional(),
 
@@ -351,9 +309,7 @@ export const updateEmployeeSchema = z.object({
   previousCompany3EndDate: z.iso.date().optional(),
 
   /* 週あたり稼働時間 */
-  weeklyWorkHours: z
-    .string()
-    .trim()
+  weeklyWorkHours: freeText()
     .max(20)
     .optional(),
 
@@ -371,37 +327,27 @@ export const updateEmployeeSchema = z.object({
     .optional(),
 
   /* 都道府県 */
-  prefecture: z
-    .string()
-    .trim()
+  prefecture: freeText()
     .max(10)
     .optional(),
 
   /* 市区町村 */
-  city: z
-    .string()
-    .trim()
+  city: freeText()
     .max(100)
     .optional(),
 
   /* 番地・建物名 */
-  streetAddress: z
-    .string()
-    .trim()
+  streetAddress: freeText()
     .max(100)
     .optional(),
 
   /* 緊急連絡先氏名 */
-  emergencyContactName: z
-    .string()
-    .trim()
+  emergencyContactName: personName()
     .max(50)
     .optional(),
 
   /* 緊急連絡先続柄 */
-  emergencyContactRelationship: z
-    .string()
-    .trim()
+  emergencyContactRelationship: freeText()
     .max(20)
     .optional(),
 
@@ -439,9 +385,7 @@ export const updateEmployeeSchema = z.object({
     .optional(),
 
   /* 給与振込口座 */
-  salaryAccount: z
-    .string()
-    .trim()
+  salaryAccount: freeText()
     .max(100)
     .optional(),
 
@@ -470,16 +414,12 @@ export const updateEmployeeSchema = z.object({
         active: z.boolean(),
 
         /* 案件名 */
-        projectName: z
-          .string()
-          .trim()
+        projectName: freeText()
           .min(1)
           .max(100),
 
         /* 常駐先企業名 */
-        factory: z
-          .string()
-          .trim()
+        factory: freeText()
           .min(1)
           .max(100),
 
@@ -524,65 +464,264 @@ export const updateEmployeeSchema = z.object({
 
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
 
-// 一覧画面用ビュー: Employee(社員ID/社員番号/氏名) + ProjectAssignment(言語/単価/状態)
-export const EmployeeListItemSchema = z.object({
-  employeeId: z.number(),
-  employeeCode: z.string(),
-  name: z.string(),
-  contractPrice: z.number().nullable(),
-  status: z.enum(EmployeeStatus).nullable(),
-});
-
-export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;
-
-export const EmployeeListSchema = z.array(EmployeeListItemSchema);
-
+/** 社員一覧の検索条件 */
 export const EmployeeListQuerySchema = z.object({
-  employeeCode: z.string().optional(),
-  name: z.string().optional(),
+  /* 社員番号（部分一致） */
+  employeeCode: freeText()
+    .max(20)
+    .optional(),
+
+  /* 氏名・フリガナ（部分一致） */
+  name: freeText()
+    .max(50)
+    .optional(),
+
+  /* 専門領域 */
+  specialtyFilter: z.enum(Specialty).optional(),
+
+  /* 稼働ステータス（管理者・システム管理者のみ） */
+  workStatusFilter: z.enum(WorkStatus).optional(),
+
+  /* スキルID（カンマ区切り・20件まで。いずれかを持つ社員） */
+  skillsFilter: z
+    .string()
+    .regex(/^[1-9]\d{0,8}(,[1-9]\d{0,8}){0,19}$/)
+    .optional(),
+
+  /* 今月入社の社員だけ */
+  monthly: z.enum(["true", "false"]).optional(),
+
+  /* 入社年月の並び順 */
+  sort: z.enum(["asc", "desc"]).default("desc"),
+
+  /* ページ番号 */
+  page: z
+    .coerce.number()
+    .int()
+    .min(1)
+    .max(100000)
+    .default(1),
+
+  /* 1ページの件数 */
+  limit: z
+    .coerce.number()
+    .int()
+    .min(1)
+    .max(100)
+    .default(12),
 });
 
-export const EmployeeDetailsSchema = z.object({
+export type EmployeeListQuery = z.infer<typeof EmployeeListQuerySchema>;
+
+/** 社員一覧の1件（公開の項目だけ） */
+const EmployeeListItemSchema = z.object({
+  /* 社員ID */
   employeeId: z.number(),
+
+  /* 社員番号 */
   employeeCode: z.string(),
-  userId: z.number().nullable(),
+
+  /* 氏名 */
   name: z.string(),
+
+  /* フリガナ */
   furigana: z.string().nullable(),
-  email: z.string().nullable(),
-  birthDate: z.string().nullable(),
-  gender: z.enum(Gender).nullable(),
-  phone: z.string().nullable(),
+
+  /* 専門領域 */
+  specialty: z.enum(Specialty),
+
+  /* 入社年月 */
   joinDate: z.string().nullable(),
+
+  /* 保有スキル名 */
+  skills: z.array(z.string()),
+});
+
+/** 社員一覧の応答（ページ付き） */
+export const EmployeeListSchema = z.object({
+  /* 社員 */
+  items: z.array(EmployeeListItemSchema),
+
+  /* 該当件数 */
+  total: z.number(),
+
+  /* 今のページ番号 */
+  currentPage: z.number(),
+
+  /* 総ページ数 */
+  totalPage: z.number(),
+});
+
+/** 社員詳細の案件履歴（1件分） */
+const ProjectHistoryDetailSchema = z.object({
+  /* 稼働中か */
+  active: z.boolean(),
+
+  /* 案件名 */
+  projectName: z.string(),
+
+  /* 常駐先企業名 */
+  factory: z.string(),
+
+  /* 参画開始日 */
+  startDate: z.string(),
+
+  /* 参画終了日 */
+  endDate: z.string().nullable(),
+
+  /* 使用スキル */
+  skills: z.array(
+    z.object({
+      /* スキルID */
+      skillId: z.number(),
+
+      /* スキル名 */
+      name: z.string(),
+    }),
+  ),
+
+  /* 契約単価履歴 */
+  contracts: z.array(
+    z.object({
+      /* 適用開始日 */
+      startDate: z.string(),
+
+      /* 契約単価 */
+      unitPrice: z.number().nullable(),
+    }),
+  ),
+});
+
+/** 社員詳細の応答（日付は"YYYY-MM-DD"。読む権限のないまとまりの項目はnull） */
+export const EmployeeDetailSchema = z.object({
+  /* 社員番号 */
+  employeeCode: z.string(),
+
+  /* ロール（アカウント未発行の社員はnull） */
+  role: z.enum(ROLE_NAMES).nullable(),
+
+  /* メールアドレス */
+  email: z.string().nullable(),
+
+  /* 氏名 */
+  name: z.string(),
+
+  /* フリガナ */
+  furigana: z.string().nullable(),
+
+  /* 生年月日 */
+  birthDate: z.string().nullable(),
+
+  /* 性別 */
+  gender: z.enum(Gender).nullable(),
+
+  /* 電話番号 */
+  phone: z.string().nullable(),
+
+  /* 入社年月（"YYYY-MM"） */
+  joinDate: z.string().nullable(),
+
+  /* 専門領域 */
+  specialty: z.enum(Specialty),
+
+  /* 稼働ステータス */
+  workStatus: z.enum(WorkStatus).nullable(),
+
+  /* GitHubユーザー名 */
+  gitHub: z.string().nullable(),
+
+  /* 研修終了日 */
   trainingEndDate: z.string().nullable(),
-  status: z.enum(EmployeeStatus).nullable(),
+
+  /* 前職1社目の会社名 */
   previousCompany1Name: z.string().nullable(),
+
+  /* 前職1社目の在籍開始日 */
   previousCompany1StartDate: z.string().nullable(),
+
+  /* 前職1社目の在籍終了日 */
   previousCompany1EndDate: z.string().nullable(),
+
+  /* 前職2社目の会社名 */
   previousCompany2Name: z.string().nullable(),
+
+  /* 前職2社目の在籍開始日 */
   previousCompany2StartDate: z.string().nullable(),
+
+  /* 前職2社目の在籍終了日 */
   previousCompany2EndDate: z.string().nullable(),
+
+  /* 前職3社目の会社名 */
   previousCompany3Name: z.string().nullable(),
+
+  /* 前職3社目の在籍開始日 */
   previousCompany3StartDate: z.string().nullable(),
+
+  /* 前職3社目の在籍終了日 */
   previousCompany3EndDate: z.string().nullable(),
+
+  /* 週あたり稼働時間 */
   weeklyWorkHours: z.string().nullable(),
+
+  /* 月額想定給与 */
   monthlyEstimatedSalary: z.number().nullable(),
+
+  /* 郵便番号 */
   postalCode: z.string().nullable(),
+
+  /* 都道府県 */
   prefecture: z.string().nullable(),
+
+  /* 市区町村 */
   city: z.string().nullable(),
+
+  /* 番地・建物名 */
   streetAddress: z.string().nullable(),
+
+  /* 緊急連絡先氏名 */
   emergencyContactName: z.string().nullable(),
+
+  /* 緊急連絡先続柄 */
   emergencyContactRelationship: z.string().nullable(),
+
+  /* 緊急連絡先電話番号 */
   emergencyContactPhone: z.string().nullable(),
-  hasSpouse: z.boolean().nullable(),
-  hasChildren: z.boolean().nullable(),
-  hasDependents: z.boolean().nullable(),
+
+  /* 配偶者の有無 */
+  hasSpouse: z.enum(["有", "無"]).nullable(),
+
+  /* 子の有無 */
+  hasChildren: z.enum(["有", "無"]).nullable(),
+
+  /* 扶養家族の有無 */
+  hasDependents: z.enum(["有", "無"]).nullable(),
+
+  /* マイナンバー */
   myNumber: z.string().nullable(),
+
+  /* 雇用保険番号 */
   employmentInsuranceNumber: z.string().nullable(),
+
+  /* 基礎年金番号 */
   basicPensionNumber: z.string().nullable(),
+
+  /* 給与振込口座 */
   salaryAccount: z.string().nullable(),
-  isDelete: z.boolean(),
-  createrId: z.string().nullable(),
-  createdAt: z.string(),
-  updaterId: z.string().nullable(),
-  updatedAt: z.string(),
+
+  /* 保有スキル */
+  skills: z.array(
+    z.object({
+      /* スキルID */
+      skillId: z.number(),
+
+      /* スキル名 */
+      name: z.string(),
+
+      /* 経験年数 */
+      years: z.number(),
+    }),
+  ),
+
+  /* 案件履歴 */
+  projects: z.array(ProjectHistoryDetailSchema).nullable(),
 });

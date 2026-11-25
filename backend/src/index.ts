@@ -13,6 +13,8 @@ app.use(
   cors({
     origin: ["http://localhost:3000", "http://localhost:3010"],
     credentials: true,
+    // 登録APIのLocationヘッダーをフロントから読めるようにする
+    exposeHeaders: ["Location"],
   }),
 );
 
@@ -22,6 +24,12 @@ app.get("/", (c) => {
 
 app.route("/api", authRoutes);
 app.route("/api", employeeRoutes);
+
+// 通行証（ログインAPIのaccessToken）をAuthorizationヘッダーで送る方式。Swagger UIのAuthorizeボタンから入力できる
+app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
+  type: "http",
+  scheme: "bearer",
+});
 
 app.doc("/doc", {
   openapi: "3.0.0",

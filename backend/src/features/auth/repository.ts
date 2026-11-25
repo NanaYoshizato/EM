@@ -12,11 +12,14 @@ export const findUserByEmail = async (email: string) => {
   });
 };
 
-/** userTableからfirebaseUidを取得する */
+/** userTableからfirebaseUidを取得する（紐づく社員のidも読む） */
 export const findUserByFirebaseUid = async (firebaseUid: string) => {
   return prisma.user.findUnique({
     where: { firebaseUid },
-    include: { role: true },
+    include: {
+      role: true,
+      employee: { select: { id: true, isDelete: true } },
+    },
   });
 };
 

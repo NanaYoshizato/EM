@@ -3,6 +3,8 @@ import { type RoleName } from "./roles";
 export type Actor = {
     userId: number;
     role: RoleName;
+    /** 本人かどうかの判定に使う（社員が紐づいていなければnull） */
+    employeeId: number | null;
 };
 
 /**
@@ -15,6 +17,9 @@ export type Scope = "all" | "assigned" | "own" | "none";
 const PERMISSION_TABLE = {
     "employee.create": { admin: "all", system_admin: "all", sales: "none", mentor: "none", employee: "none" },
     "employee.delete": { admin: "all", system_admin: "all", sales: "none", mentor: "none", employee: "none" },
+    // 公開（一覧に出る項目）
+    "employee.public.read": { admin: "all", system_admin: "all", sales: "none", mentor: "all", employee: "all" },
+    "employee.public.write": { admin: "all", system_admin: "all", sales: "none", mentor: "none", employee: "none" },
     "employee.basic.read": { admin: "all", system_admin: "all", sales: "assigned", mentor: "assigned", employee: "own" },
     "employee.basic.write": { admin: "all", system_admin: "all", sales: "none", mentor: "none", employee: "none" },
     "employee.projects.read": { admin: "all", system_admin: "all", sales: "assigned", mentor: "assigned", employee: "own" },

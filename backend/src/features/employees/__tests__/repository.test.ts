@@ -6,32 +6,34 @@ vi.mock("@/lib/prisma", () => ({
     $queryRaw: vi.fn(),
     employee: {
       findMany: vi.fn(),
-      findUnique: vi.fn(),
       findFirst: vi.fn(),
+      count: vi.fn(),
     },
   },
 }));
 
 import {
   employeeRepository,
-  getEmployeeList,
-  getEmployeeDetails,
+  employeeQueryRepository,
   findEmployeeSummaryByUserId,
 } from "../repository";
 import { prisma } from "@/lib/prisma";
-import { Gender, EmployeeStatus, Specialty, WorkStatus, Prisma } from "@prisma/client";
+import { Gender, Specialty, WorkStatus, Prisma } from "@prisma/client";
 import {
   ConcurrentUpdateError,
   DuplicateFieldError,
   Employee,
   InvalidSkillIdError,
 } from "../domain/employee";
+import { DETAIL_FIELD_GROUPS } from "../domain/fieldGroups";
+import { updateEmployeeSchema } from "../types/employee.schema";
+import type { FieldGroup } from "../domain/types";
 
 const mockTransaction = vi.mocked(prisma.$transaction);
 const mockQueryRaw = vi.mocked(prisma.$queryRaw);
 const mockEmployeeFindMany = vi.mocked(prisma.employee.findMany);
-const mockEmployeeFindUnique = vi.mocked(prisma.employee.findUnique);
 const mockEmployeeFindFirst = vi.mocked(prisma.employee.findFirst);
+const mockEmployeeCount = vi.mocked(prisma.employee.count);
 
 const baseInput = {
   email: "test@example.com",
@@ -160,6 +162,194 @@ describe("findById", () => {
     mockEmployeeFindFirst.mockResolvedValue(null);
 
     expect(await employeeRepository.findById(999)).toBeNull();
+  });
+});
+
+describe("findDetail", () => {
+  /** DBの1行分（応答に出してはいけない列も含める） */
+  const row = {
+    id: 1,
+    employeeCode: "EMP001",
+    userId: 10,
+    user: { isDelete: false, role: { name: "employee" } },
+    name: "山田太郎",
+    furigana: "ヤマダタロウ",
+    email: "test@example.com",
+    birthDate: new Date("1990-01-01"),
+    gender: Gender.MALE,
+    phone: null,
+    joinDate: new Date("2026-04-01"),
+    specialty: "BE",
+    workStatus: "ASSIGNED",
+    gitHub: null,
+    trainingEndDate: null,
+    previousCompany1Name: "前職A",
+    previousCompany1StartDate: new Date("2020-04-01"),
+    previousCompany1EndDate: null,
+    previousCompany2Name: null,
+    previousCompany2StartDate: null,
+    previousCompany2EndDate: null,
+    previousCompany3Name: null,
+    previousCompany3StartDate: null,
+    previousCompany3EndDate: null,
+    weeklyWorkHours: null,
+    monthlyEstimatedSalary: 300000,
+    postalCode: null,
+    prefecture: null,
+    city: null,
+    streetAddress: null,
+    nearestStation: "東京駅",
+    emergencyContactName: null,
+    emergencyContactRelationship: null,
+    emergencyContactPhone: null,
+    hasSpouse: true,
+    hasChildren: false,
+    hasDependents: null,
+    myNumber: "123456789012",
+    employmentInsuranceNumber: null,
+    basicPensionNumber: null,
+    salaryAccount: null,
+    isDelete: false,
+    createrId: "1",
+    createdAt: new Date("2026-01-01"),
+    updaterId: "1",
+    updatedAt: new Date("2026-01-01"),
+    employeeSkills: [{ skillId: 1, years: 2.5, skill: { name: "TypeScript" } }],
+    projectHistories: [
+      {
+        active: true,
+        projectName: "案件A",
+        factory: "現場A",
+        startDate: new Date("2026-01-01"),
+        endDate: null,
+        skills: [{ skillId: 1, skill: { name: "TypeScript" } }],
+        contracts: [{ startDate: new Date("2026-01-01"), unitPrice: 600000 }],
+      },
+    ],
+  };
+
+  const ALL: Set<FieldGroup> = new Set(["public", "basic", "contact", "projects", "confidential"]);
+  const PUBLIC_ONLY: Set<FieldGroup> = new Set(["public"]);
+
+  /** findFirstに渡したselect */
+  const selectArg = () => mockEmployeeFindFirst.mock.calls[0]?.[0]?.select ?? {};
+
+  it("論理削除済みを除いて読み込む", async () => {
+    mockEmployeeFindFirst.mockResolvedValue(row as never);
+
+    await employeeQueryRepository.findDetail(1, ALL);
+
+    expect(mockEmployeeFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1, isDelete: false } }),
+    );
+  });
+
+  it("画面表示用の形に変換する（日付は文字列・入社年月は年月まで、家族の有無は有/無、スキル名付き）", async () => {
+    mockEmployeeFindFirst.mockResolvedValue(row as never);
+
+    const result = await employeeQueryRepository.findDetail(1, ALL);
+
+    expect(result).toMatchObject({
+      employeeCode: "EMP001",
+      role: "employee",
+      birthDate: "1990-01-01",
+      joinDate: "2026-04",
+      previousCompany1StartDate: "2020-04-01",
+      previousCompany1EndDate: null,
+      myNumber: "123456789012",
+      hasSpouse: "有",
+      hasChildren: "無",
+      hasDependents: null,
+      skills: [{ skillId: 1, name: "TypeScript", years: 2.5 }],
+      projects: [
+        {
+          active: true,
+          projectName: "案件A",
+          factory: "現場A",
+          startDate: "2026-01-01",
+          endDate: null,
+          skills: [{ skillId: 1, name: "TypeScript" }],
+          contracts: [{ startDate: "2026-01-01", unitPrice: 600000 }],
+        },
+      ],
+    });
+  });
+
+  it("返した入社年月は、そのまま更新に送っても入力チェックを通る", async () => {
+    mockEmployeeFindFirst.mockResolvedValue(row as never);
+
+    const result = await employeeQueryRepository.findDetail(1, ALL);
+
+    expect(updateEmployeeSchema.safeParse({ joinDate: result?.joinDate }).success).toBe(true);
+  });
+
+  it("返す項目は分類表（DETAIL_FIELD_GROUPS）の項目だけで、過不足が無い", async () => {
+    mockEmployeeFindFirst.mockResolvedValue(row as never);
+
+    const result = await employeeQueryRepository.findDetail(1, ALL);
+
+    expect(Object.keys(result ?? {}).sort()).toEqual(Object.keys(DETAIL_FIELD_GROUPS).sort());
+  });
+
+  it("読めないまとまりの列はDBに要求せず、項目はnullで返す", async () => {
+    mockEmployeeFindFirst.mockResolvedValue(row as never);
+
+    const result = await employeeQueryRepository.findDetail(1, PUBLIC_ONLY);
+
+    for (const column of ["user", "workStatus", "previousCompany1Name", "email", "birthDate", "projectHistories", "myNumber", "hasSpouse"]) {
+      expect(selectArg()).not.toHaveProperty(column);
+    }
+    for (const [field, group] of Object.entries(DETAIL_FIELD_GROUPS)) {
+      if (group !== "public") expect(result).toHaveProperty(field, null);
+    }
+    expect(result).toMatchObject({
+      employeeCode: "EMP001",
+      name: "山田太郎",
+      furigana: "ヤマダタロウ",
+      specialty: "BE",
+      joinDate: "2026-04",
+      skills: [{ skillId: 1, name: "TypeScript", years: 2.5 }],
+    });
+  });
+
+  it("読めるまとまりだけを読む（連絡先だけ読める場合）", async () => {
+    mockEmployeeFindFirst.mockResolvedValue(row as never);
+
+    const result = await employeeQueryRepository.findDetail(1, new Set(["public", "contact"]));
+
+    expect(selectArg()).toHaveProperty("email", true);
+    expect(selectArg()).not.toHaveProperty("myNumber");
+    expect(selectArg()).not.toHaveProperty("projectHistories");
+    expect(result?.email).toBe("test@example.com");
+    expect(result?.myNumber).toBeNull();
+    expect(result?.projects).toBeNull();
+  });
+
+  it("公開の項目は、指定が無くても必ず読む", async () => {
+    mockEmployeeFindFirst.mockResolvedValue(row as never);
+
+    await employeeQueryRepository.findDetail(1, new Set());
+
+    expect(selectArg()).toHaveProperty("name", true);
+    expect(selectArg()).toHaveProperty("employeeSkills");
+    expect(selectArg()).not.toHaveProperty("workStatus");
+  });
+
+  it.each([
+    ["アカウントが無い", null],
+    ["アカウントが論理削除済み", { isDelete: true, role: { name: "admin" } }],
+  ])("%s場合、roleはnull", async (_, user) => {
+    mockEmployeeFindFirst.mockResolvedValue({ ...row, userId: null, user } as never);
+
+    const result = await employeeQueryRepository.findDetail(1, ALL);
+
+    expect(result?.role).toBeNull();
+  });
+
+  it("存在しない・論理削除済みの場合、nullを返す", async () => {
+    mockEmployeeFindFirst.mockResolvedValue(null);
+
+    expect(await employeeQueryRepository.findDetail(999, ALL)).toBeNull();
   });
 });
 
@@ -323,189 +513,123 @@ describe("update", () => {
   });
 });
 
-describe("getEmployeeList", () => {
-  const buildEmployee = (
-    overrides: Partial<{
-      id: number;
-      employeeCode: string;
-      name: string;
-      assignments: Array<{
-        status: EmployeeStatus;
-        contractPrice: number | null;
-        startDate: Date | null;
-      }>;
-    }>,
-  ) => ({
+describe("findList", () => {
+  /** 既定の検索条件（絞り込みなし・新しい順・1ページ目・12件） */
+  const base = { sort: "desc", page: 1, limit: 12 } as const;
+
+  /** findManyとcountに渡した条件 */
+  const findManyArg = () => mockEmployeeFindMany.mock.calls[0]?.[0];
+  const whereArg = () => findManyArg()?.where;
+
+  const row = {
     id: 1,
     employeeCode: "EMP001",
-    name: "John Doe",
-    assignments: [],
-    ...overrides,
+    name: "山田太郎",
+    furigana: "ヤマダタロウ",
+    specialty: "BE",
+    joinDate: new Date("2026-04-01"),
+    employeeSkills: [{ skill: { name: "TypeScript" } }, { skill: { name: "React" } }],
+  };
+
+  beforeEach(() => {
+    mockEmployeeFindMany.mockResolvedValue([row] as never);
+    mockEmployeeCount.mockResolvedValue(1);
   });
 
-  it("社員一覧を取得する (アサインありの場合: 言語/単価/状態を返す)", async () => {
-    mockEmployeeFindMany.mockResolvedValue([
-      buildEmployee({
-        id: 1,
-        employeeCode: "EMP001",
-        name: "John Doe",
-        assignments: [
-          {
-            status: EmployeeStatus.WORKING,
-            contractPrice: 680000,
-            startDate: new Date("2026-01-01"),
-          },
-        ],
-      }),
-      buildEmployee({
-        id: 2,
-        employeeCode: "EMP002",
-        name: "Jane Smith",
-        assignments: [],
-      }),
-    ] as never);
+  it("公開の項目だけを一覧の形に変換し、該当件数と一緒に返す", async () => {
+    mockEmployeeCount.mockResolvedValue(25);
 
-    const result = await getEmployeeList();
+    const result = await employeeQueryRepository.findList(base);
 
-    expect(mockEmployeeFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { isDelete: false },
-      }),
-    );
-    expect(result).toEqual([
-      {
-        employeeId: 1,
-        employeeCode: "EMP001",
-        name: "John Doe",
-        contractPrice: 680000,
-        status: EmployeeStatus.WORKING,
-      },
-      {
-        employeeId: 2,
-        employeeCode: "EMP002",
-        name: "Jane Smith",
-        contractPrice: null,
-        status: null,
-      },
+    expect(result).toEqual({
+      total: 25,
+      items: [
+        {
+          employeeId: 1,
+          employeeCode: "EMP001",
+          name: "山田太郎",
+          furigana: "ヤマダタロウ",
+          specialty: "BE",
+          joinDate: "2026-04",
+          skills: ["TypeScript", "React"],
+        },
+      ],
+    });
+  });
+
+  it("公開の項目以外の列はDBに要求しない", async () => {
+    await employeeQueryRepository.findList(base);
+
+    const select = findManyArg()?.select ?? {};
+    for (const column of ["workStatus", "email", "myNumber", "projectHistories", "user"]) {
+      expect(select).not.toHaveProperty(column);
+    }
+  });
+
+  it("論理削除済みを除き、件数と一覧は同じ条件で数える", async () => {
+    await employeeQueryRepository.findList(base);
+
+    expect(whereArg()).toEqual({ isDelete: false });
+    expect(mockEmployeeCount).toHaveBeenCalledWith({ where: whereArg() });
+  });
+
+  it("入社年月の順（未入力は最後）、同じ日付はid順で並べる", async () => {
+    await employeeQueryRepository.findList({ ...base, sort: "asc" });
+
+    expect(findManyArg()?.orderBy).toEqual([
+      { joinDate: { sort: "asc", nulls: "last" } },
+      { id: "asc" },
     ]);
   });
 
-  it("社員コードでフィルタリングする (部分一致)", async () => {
-    mockEmployeeFindMany.mockResolvedValue([] as never);
+  it("指定したページの分だけ読む（3ページ目・12件ずつなら24件飛ばす）", async () => {
+    await employeeQueryRepository.findList({ ...base, page: 3 });
 
-    await getEmployeeList({ employeeCode: "EMP001" });
-
-    expect(mockEmployeeFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          isDelete: false,
-          employeeCode: { contains: "EMP001" },
-        },
-      }),
-    );
+    expect(findManyArg()).toMatchObject({ skip: 24, take: 12 });
   });
 
-  it("名前でフィルタリングする (部分一致)", async () => {
-    mockEmployeeFindMany.mockResolvedValue([] as never);
+  it("社員番号は大文字・小文字を区別せず部分一致", async () => {
+    await employeeQueryRepository.findList({ ...base, employeeCode: "emp" });
 
-    await getEmployeeList({ name: "John" });
-
-    expect(mockEmployeeFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          isDelete: false,
-          name: { contains: "John" },
-        },
-      }),
-    );
+    expect(whereArg()).toMatchObject({ employeeCode: { contains: "emp", mode: "insensitive" } });
   });
 
-  it("複数のフィルタを適用する", async () => {
-    mockEmployeeFindMany.mockResolvedValue([] as never);
+  it("氏名は、氏名かフリガナの部分一致（ひらがなはカタカナにしてフリガナと比べる）", async () => {
+    await employeeQueryRepository.findList({ ...base, name: "やまだ" });
 
-    await getEmployeeList({ employeeCode: "EMP001", name: "John" });
-
-    expect(mockEmployeeFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          isDelete: false,
-          employeeCode: { contains: "EMP001" },
-          name: { contains: "John" },
-        },
-      }),
-    );
-  });
-});
-
-describe("getEmployeeDetails", () => {
-  const employeeId = 1;
-  const expectedDetails = {
-    id: employeeId,
-    employeeCode: "EMP001",
-    userId: 1,
-    name: "John Doe",
-    furigana: "ヤマダタロウ",
-    email: "test@example.com",
-    birthDate: new Date("1990-01-01"),
-    gender: Gender.MALE,
-    phone: null,
-    joinDate: null,
-    specialty: "UNDECIDED",
-    workStatus: "WAITING",
-    gitHub: null,
-    trainingEndDate: null,
-    previousCompany1Name: null,
-    previousCompany1StartDate: null,
-    previousCompany1EndDate: null,
-    previousCompany2Name: null,
-    previousCompany2StartDate: null,
-    previousCompany2EndDate: null,
-    previousCompany3Name: null,
-    previousCompany3StartDate: null,
-    previousCompany3EndDate: null,
-    weeklyWorkHours: null,
-    monthlyEstimatedSalary: null,
-    postalCode: null,
-    prefecture: null,
-    city: null,
-    streetAddress: null,
-    nearestStation: null,
-    emergencyContactName: null,
-    emergencyContactRelationship: null,
-    emergencyContactPhone: null,
-    hasSpouse: null,
-    hasChildren: null,
-    hasDependents: null,
-    myNumber: null,
-    employmentInsuranceNumber: null,
-    basicPensionNumber: null,
-    salaryAccount: null,
-    isDelete: false,
-    createrId: null,
-    createdAt: new Date("2026-01-01"),
-    updaterId: null,
-    updatedAt: new Date("2026-01-01"),
-  };
-
-  it("社員の詳細情報を取得する", async () => {
-    mockEmployeeFindUnique.mockResolvedValue(expectedDetails as never);
-
-    const result = await getEmployeeDetails(employeeId);
-
-    expect(mockEmployeeFindUnique).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: employeeId },
-      }),
-    );
-    expect(result).toEqual(expectedDetails);
+    expect(whereArg()).toMatchObject({
+      OR: [
+        { name: { contains: "やまだ", mode: "insensitive" } },
+        { furigana: { contains: "ヤマダ", mode: "insensitive" } },
+      ],
+    });
   });
 
-  it("存在しない社員の場合nullを返す", async () => {
-    mockEmployeeFindUnique.mockResolvedValue(null);
+  it("専門領域・稼働ステータスは一致するものだけ", async () => {
+    await employeeQueryRepository.findList({ ...base, specialty: "FE", workStatus: "WAITING" });
 
-    const result = await getEmployeeDetails(9999);
+    expect(whereArg()).toMatchObject({ specialty: "FE", workStatus: "WAITING" });
+  });
 
-    expect(result).toBeNull();
+  it("スキルは、指定したいずれかを持つ社員", async () => {
+    await employeeQueryRepository.findList({ ...base, skillIds: [3, 12] });
+
+    expect(whereArg()).toMatchObject({ employeeSkills: { some: { skillId: { in: [3, 12] } } } });
+  });
+
+  it("スキルの指定が空なら絞り込まない", async () => {
+    await employeeQueryRepository.findList({ ...base, skillIds: [] });
+
+    expect(whereArg()).not.toHaveProperty("employeeSkills");
+  });
+
+  it.each([
+    ["月の途中", "2026-11", "2026-11-01", "2026-12-01"],
+    ["12月（翌年の1月1日まで）", "2026-12", "2026-12-01", "2027-01-01"],
+  ])("入社月は、その月の1日から翌月1日の前まで（%s）", async (_, month, start, end) => {
+    await employeeQueryRepository.findList({ ...base, joinedMonth: month });
+
+    expect(whereArg()).toMatchObject({ joinDate: { gte: new Date(start), lt: new Date(end) } });
   });
 });
 

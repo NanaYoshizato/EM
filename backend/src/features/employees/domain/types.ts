@@ -3,6 +3,7 @@
  */
 
 import type { Employee, ProjectHistory } from "./employee";
+import type { RoleName } from "@/constants/roles";
 
 export type Gender = "MALE" | "FEMALE" | "OTHER";
 export type Specialty = "FE" | "BE" | "UNDECIDED";
@@ -130,7 +131,7 @@ export type EmployeeErrorCode =
  * 社員のDBへの保存・読み込みを行うポート（実装はrepository.ts）。
  * serviceはこの型だけを知り、Prismaなどの具体的な実装には依存しない。
  */
-export interface EmployeeRepository {
+export type EmployeeRepository = {
 	/** 既存社員コードの最大値（社員が1人もいなければnull） */
 	findLastEmployeeCode(): Promise<string | null>;
 	/** DBから社員を読み込む（存在しない・論理削除済みならnull） */
@@ -144,5 +145,68 @@ export interface EmployeeRepository {
 /**
  * 社員情報の権限の区分
  */
-export type FieldGroup = "basic" | "contact" | "projects" | "confidential";
+export type FieldGroup = "public" | "basic" | "contact" | "projects" | "confidential";
 
+
+type OrNull<T> = { [K in keyof T]-?: Exclude<T[K], undefined> | null };
+
+/**
+ * 案件詳細履歴
+ */
+export type ProjectHistoryDetail = {
+	active: boolean;
+	projectName: string;
+	factory: string;
+	startDate: string;
+	endDate: string | null;
+	skills: { skillId: number; name: string }[];
+	contracts: { startDate: string; unitPrice: number | null }[];
+};
+
+/**
+ * 社員詳細（POSTの型をGET用に作りかえる。応答の型と合わせるため、配列はreadonlyにしない）
+ */
+export type EmployeeDetail  = {
+	// 公開の項目（必ず読むのでnullにならない）
+	employeeCode: string;
+	name: string;
+	specialty: Specialty;
+	skills: { skillId: number; name: string; years: number }[];
+	role: RoleName | null; //入社前社員の登録をするためnullを許容
+	projects: ProjectHistoryDetail[] | null;
+} & OrNull<Omit<ProfileInput, "name" | "specialty">>;
+
+/** 社員一覧の1件（公開の項目だけ） */
+export type EmployeeListItem = {
+	employeeId: number;
+	employeeCode: string;
+	name: string;
+	furigana: string | null;
+	specialty: Specialty;
+	joinDate: string | null; // "YYYY-MM"
+	skills: string[];
+};
+
+/** 社員一覧の絞り込み・並び順・ページ */
+export type EmployeeListCondition = {
+	employeeCode?: string | undefined;
+	name?: string | undefined;
+	specialty?: Specialty | undefined;
+	workStatus?: WorkStatus | undefined;
+	skillIds?: number[] | undefined;
+	joinedMonth?: string | undefined; // "YYYY-MM"
+	sort: "asc" | "desc";
+	page: number;
+	limit: number;
+};
+
+/** 社員の読み取り専用ポート（実装はrepository.ts） */
+export type EmployeeQueryRepository = {
+	/**
+	 * 社員詳細（存在しない・論理削除済みならnull）。
+	 * groupsにあるまとまりの列だけをDBから読み、それ以外のまとまりの項目はnullで返す（公開の項目は必ず読む）
+	 */
+	findDetail(employeeId: number, groups: Set<FieldGroup>): Promise<EmployeeDetail | null>;
+	/** 社員一覧（論理削除済みを除く）。該当件数と、指定したページの社員を返す */
+	findList(condition: EmployeeListCondition): Promise<{ items: EmployeeListItem[]; total: number }>;
+};

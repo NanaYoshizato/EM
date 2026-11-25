@@ -7,4 +7,5 @@
 preflight.md
 docs
 firebase-debug.log*
+emulator_data/
 *.log

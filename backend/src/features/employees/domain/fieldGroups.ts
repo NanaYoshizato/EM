@@ -1,14 +1,19 @@
-import type { FieldGroup, NewEmployeeInput } from "./types";
+import type { EmployeeDetail, FieldGroup, NewEmployeeInput } from "./types";
 
-/** 項目がどのまとまりに属するか（権限の判定に使う） */
+/** 
+ * 項目がどのまとまりに属するか（権限の判定に使う）
+ * PERMISSION_TABLEのemployee.○○の値を項目に設定
+ *  */
 export const FIELD_GROUPS: Record<keyof NewEmployeeInput, FieldGroup> = {
+    // 公開（一覧に出る項目）
+    name: "public",
+    furigana: "public",
+    specialty: "public",
+    skills: "public",
+    joinDate: "public",
+
     // 基本情報
-    name: "basic",
-    furigana: "basic",
-    specialty: "basic",
     workStatus: "basic",
-    skills: "basic",
-    joinDate: "basic",
     trainingEndDate: "basic",
     gitHub: "basic",
     previousCompany1Name: "basic",
@@ -51,8 +56,15 @@ export const FIELD_GROUPS: Record<keyof NewEmployeeInput, FieldGroup> = {
 
 /** まとまりの守りの強さ */
 export const GROUP_LEVELS: Record<FieldGroup, number> = {
+    public: 0,
     basic: 1,
     projects: 1,
     contact: 2,
     confidential: 3,
+};
+
+export const DETAIL_FIELD_GROUPS: Record<keyof EmployeeDetail, FieldGroup> = {
+    ...FIELD_GROUPS,
+    employeeCode: "public",
+    role: "basic",
 };

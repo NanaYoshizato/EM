@@ -171,6 +171,10 @@ const PREVIOUS_COMPANY_LABELS = ["前職1社目", "前職2社目", "前職3社�
 const toBoolean = (value: "有" | "無" | undefined): boolean | undefined =>
 	value === undefined ? undefined : value === "有";
 
+// true/falseを有無に戻すルール（toBooleanの逆。読み取りで入力と同じ形にして返す）
+export const toFamilyAnswer = (value: boolean | null): "有" | "無" | null =>
+	value === null ? null : value ? "有" : "無";
+
 /**
  * 外から受け取った基本情報を集約の形に変換する（POST/PATCH共通）
  * 家族の有無の3項目だけ取り出してbooleanに変換し、残り（rest）はそのまま使う

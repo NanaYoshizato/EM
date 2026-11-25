@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Gender } from "@prisma/client";
+import type { EmployeeDetail } from "../domain/types";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {},
@@ -8,54 +8,59 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("../service", () => ({
   createEmployee: vi.fn(),
   updateEmployee: vi.fn(),
-  getEmployeeListService: vi.fn(),
-  getEmployeeDetailsService: vi.fn(),
+  getEmployeeList: vi.fn(),
+  getEmployeeDetail: vi.fn(),
 }));
 
 import {
   createEmployee,
   updateEmployee,
-  getEmployeeListService,
-  getEmployeeDetailsService,
+  getEmployeeList,
+  getEmployeeDetail,
 } from "../service";
-import { employeeRepository } from "../repository";
+import { employeeRepository, employeeQueryRepository } from "../repository";
 import {
   createEmployeeController,
   updateEmployeeController,
   getEmployeeListController,
-  getEmployeeDetailsController,
-  mapEmployeeDetailsResponse,
+  getEmployeeDetailController,
 } from "../controller";
 
 type CreateCtx = Parameters<typeof createEmployeeController>[0];
 type UpdateCtx = Parameters<typeof updateEmployeeController>[0];
 type ListCtx = Parameters<typeof getEmployeeListController>[0];
-type DetailsCtx = Parameters<typeof getEmployeeDetailsController>[0];
+type DetailCtx = Parameters<typeof getEmployeeDetailController>[0];
 
 const mockCreateEmployee = vi.mocked(createEmployee);
 const mockUpdateEmployee = vi.mocked(updateEmployee);
-const mockGetEmployeeListService = vi.mocked(getEmployeeListService);
-const mockGetEmployeeDetailsService = vi.mocked(getEmployeeDetailsService);
+const mockGetEmployeeList = vi.mocked(getEmployeeList);
+const mockGetEmployeeDetail = vi.mocked(getEmployeeDetail);
 
 /** ミドルウェア（requireAuth）がリクエストに持たせるログインユーザー */
-const loginUser = { id: 1, roleName: "admin" };
-const loginActor = { userId: 1, role: "admin" };
+const loginUser = { id: 1, roleName: "admin", employeeId: 1 };
+const loginActor = { userId: 1, role: "admin", employeeId: 1 };
+
+/** c.req.valid の偽物（"param" ならURLの値、"json" ならbodyを返す） */
+const validOf = (param: object, json?: object) =>
+  vi.fn((target: string) => (target === "param" ? param : json));
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe("createEmployeeController", () => {
-  it("should return 201 with no body", async () => {
+  it("登録した社員の詳細を201で返し、Locationに詳細APIの場所を入れる", async () => {
     const body = { email: "test@example.com", name: "Test" };
+    const detail = { employeeCode: "EMP006", name: "Test" } as EmployeeDetail;
     const expectedResponse = { status: 201 };
-    mockCreateEmployee.mockResolvedValue({ code: "SUCCESS", employeeId: 1 });
+    mockCreateEmployee.mockResolvedValue({ code: "SUCCESS", employeeId: 6, detail });
     const c = {
       req: {
         valid: vi.fn().mockReturnValue(body),
+        path: "/api/employees",
       },
-      body: vi.fn().mockReturnValue(expectedResponse),
-      json: vi.fn(),
+      header: vi.fn(),
+      json: vi.fn().mockReturnValue(expectedResponse),
       get: vi.fn().mockReturnValue(loginUser),
     } as unknown as CreateCtx;
 
@@ -65,11 +70,28 @@ describe("createEmployeeController", () => {
     expect(c.get).toHaveBeenCalledWith("user");
     expect(mockCreateEmployee).toHaveBeenCalledWith(
       employeeRepository,
+      employeeQueryRepository,
       loginActor,
       body,
     );
-    expect(c.body).toHaveBeenCalledWith(null, 201);
+    expect(c.header).toHaveBeenCalledWith("Location", "/api/employees/6");
+    expect(c.json).toHaveBeenCalledWith(detail, 201);
     expect(result).toBe(expectedResponse);
+  });
+
+  it("登録後に読み直せなかった場合も201で返す（本文はnull）", async () => {
+    mockCreateEmployee.mockResolvedValue({ code: "SUCCESS", employeeId: 6, detail: null });
+    const c = {
+      req: { valid: vi.fn().mockReturnValue({ name: "Test" }), path: "/api/employees" },
+      header: vi.fn(),
+      json: vi.fn(),
+      get: vi.fn().mockReturnValue(loginUser),
+    } as unknown as CreateCtx;
+
+    await createEmployeeController(c, vi.fn());
+
+    expect(c.header).toHaveBeenCalledWith("Location", "/api/employees/6");
+    expect(c.json).toHaveBeenCalledWith(null, 201);
   });
 
   it("should return 400 when email is duplicate", async () => {
@@ -179,31 +201,31 @@ describe("createEmployeeController", () => {
 });
 
 describe("updateEmployeeController", () => {
-  it("should return 200 with no body", async () => {
+  it("更新した社員の詳細を200で返す", async () => {
     const updateBody = { name: "Updated Name" };
+    const detail = { employeeCode: "EMP001", name: "Updated Name" } as EmployeeDetail;
     const expectedResponse = { status: 200 };
-    mockUpdateEmployee.mockResolvedValue({ code: "SUCCESS" });
+    mockUpdateEmployee.mockResolvedValue({ code: "SUCCESS", detail });
     const c = {
       req: {
-        param: vi.fn().mockReturnValue({ id: 1 }),
-        valid: vi.fn().mockReturnValue(updateBody),
+        valid: validOf({ id: 1 }, updateBody),
       },
-      body: vi.fn().mockReturnValue(expectedResponse),
-      json: vi.fn(),
+      json: vi.fn().mockReturnValue(expectedResponse),
       get: vi.fn().mockReturnValue(loginUser),
     } as unknown as UpdateCtx;
 
     const result = await updateEmployeeController(c, vi.fn());
 
-    expect(c.req.param).toHaveBeenCalled();
+    expect(c.req.valid).toHaveBeenCalledWith("param");
     expect(c.req.valid).toHaveBeenCalledWith("json");
     expect(mockUpdateEmployee).toHaveBeenCalledWith(
       employeeRepository,
+      employeeQueryRepository,
       loginActor,
       1,
       updateBody,
     );
-    expect(c.body).toHaveBeenCalledWith(null, 200);
+    expect(c.json).toHaveBeenCalledWith(detail, 200);
     expect(result).toBe(expectedResponse);
   });
 
@@ -215,8 +237,7 @@ describe("updateEmployeeController", () => {
     });
     const c = {
       req: {
-        param: vi.fn().mockReturnValue({ id: 1 }),
-        valid: vi.fn().mockReturnValue(updateBody),
+        valid: validOf({ id: 1 }, updateBody),
       },
       body: vi.fn(),
       json: vi.fn().mockReturnValue({ status: 400 }),
@@ -237,8 +258,7 @@ describe("updateEmployeeController", () => {
     mockUpdateEmployee.mockResolvedValue({ code: "NOT_FOUND" });
     const c = {
       req: {
-        param: vi.fn().mockReturnValue({ id: 1 }),
-        valid: vi.fn().mockReturnValue(updateBody),
+        valid: validOf({ id: 1 }, updateBody),
       },
       body: vi.fn(),
       json: vi.fn().mockReturnValue({ status: 404 }),
@@ -258,8 +278,7 @@ describe("updateEmployeeController", () => {
     });
     const c = {
       req: {
-        param: vi.fn().mockReturnValue({ id: 1 }),
-        valid: vi.fn().mockReturnValue({ name: "Updated Name" }),
+        valid: validOf({ id: 1 }, { name: "Updated Name" }),
       },
       body: vi.fn(),
       json: vi.fn().mockReturnValue({ status: 409 }),
@@ -283,8 +302,7 @@ describe("updateEmployeeController", () => {
     });
     const c = {
       req: {
-        param: vi.fn().mockReturnValue({ id: 1 }),
-        valid: vi.fn().mockReturnValue(updateBody),
+        valid: validOf({ id: 1 }, updateBody),
       },
       body: vi.fn(),
       json: vi.fn().mockReturnValue({ status: 400 }),
@@ -303,8 +321,7 @@ describe("updateEmployeeController", () => {
     mockUpdateEmployee.mockResolvedValue({ code: "FORBIDDEN" });
     const c = {
       req: {
-        param: vi.fn().mockReturnValue({ id: 1 }),
-        valid: vi.fn().mockReturnValue({ myNumber: "123456789012" }),
+        valid: validOf({ id: 1 }, { myNumber: "123456789012" }),
       },
       body: vi.fn(),
       json: vi.fn().mockReturnValue({ status: 403 }),
@@ -322,131 +339,108 @@ describe("updateEmployeeController", () => {
 });
 
 describe("getEmployeeListController", () => {
-  it("社員一覧を返す", async () => {
-    const list = [
-      {
-        employeeId: 1,
-        employeeCode: "EMP001",
-        name: "John",
-        contractPrice: 680000,
-        status: "WORKING" as const,
-      },
-    ];
-    mockGetEmployeeListService.mockResolvedValue(list);
-    const c = {
-      req: {
-        valid: vi.fn().mockReturnValue({}),
-      },
-      json: vi.fn().mockReturnValue({ status: 200 }),
-    } as unknown as ListCtx;
+  const query = { sort: "desc", page: 1, limit: 12 } as const;
+
+  const listCtx = () =>
+    ({
+      req: { valid: vi.fn().mockReturnValue(query) },
+      json: vi.fn((data: unknown, status: number) => ({ data, status })),
+      get: vi.fn().mockReturnValue(loginUser),
+    }) as unknown as ListCtx;
+
+  it("検証済みのクエリとログインユーザーでサービスを呼び、ページ付きの一覧を200で返す", async () => {
+    const page = { items: [], total: 0, currentPage: 1, totalPage: 1 };
+    mockGetEmployeeList.mockResolvedValue({ code: "SUCCESS", page });
+    const c = listCtx();
 
     const result = await getEmployeeListController(c, vi.fn());
 
-    expect(mockGetEmployeeListService).toHaveBeenCalledWith({});
-    expect(c.json).toHaveBeenCalledWith(list, 200);
-    expect(result).toEqual({ status: 200 });
+    expect(c.req.valid).toHaveBeenCalledWith("query");
+    expect(mockGetEmployeeList).toHaveBeenCalledWith(employeeQueryRepository, loginActor, query);
+    expect(result).toEqual({ data: page, status: 200 });
   });
 
-  it("検索条件を渡す", async () => {
-    mockGetEmployeeListService.mockResolvedValue([]);
-    const c = {
-      req: {
-        valid: vi
-          .fn()
-          .mockReturnValue({ employeeCode: "EMP001", name: "John" }),
-      },
-      json: vi.fn().mockReturnValue({ status: 200 }),
-    } as unknown as ListCtx;
+  it("権限が無い場合は403を返す", async () => {
+    mockGetEmployeeList.mockResolvedValue({ code: "FORBIDDEN" });
+    const c = listCtx();
 
     await getEmployeeListController(c, vi.fn());
 
-    expect(mockGetEmployeeListService).toHaveBeenCalledWith({
-      employeeCode: "EMP001",
-      name: "John",
-    });
+    expect(c.json).toHaveBeenCalledWith({ error: "この操作を行う権限がありません" }, 403);
+  });
+
+  it("想定外のエラーは500を返す", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockGetEmployeeList.mockRejectedValue(new Error("DB接続エラー"));
+    const c = listCtx();
+
+    await getEmployeeListController(c, vi.fn());
+
+    expect(c.json).toHaveBeenCalledWith({ error: "サーバーエラーが発生しました" }, 500);
+    consoleError.mockRestore();
   });
 });
 
-describe("getEmployeeDetailsController", () => {
-  it("should return employee details with 200", async () => {
-    const serviceResult = {
-      id: 1,
-      employeeCode: "EMP001",
-      userId: 1,
-      name: "山田太郎",
-      furigana: "ヤマダタロウ",
-      email: "test@example.com",
-      birthDate: new Date("1990-01-01"),
-      gender: Gender.MALE,
-      phone: null,
-      joinDate: null,
-      specialty: "UNDECIDED" as const,
-      workStatus: "WAITING" as const,
-      gitHub: null,
-      trainingEndDate: null,
-      assignments: [{ status: "WORKING" as const }],
-      previousCompany1Name: null,
-      previousCompany1StartDate: null,
-      previousCompany1EndDate: null,
-      previousCompany2Name: null,
-      previousCompany2StartDate: null,
-      previousCompany2EndDate: null,
-      previousCompany3Name: null,
-      previousCompany3StartDate: null,
-      previousCompany3EndDate: null,
-      weeklyWorkHours: null,
-      monthlyEstimatedSalary: null,
-      postalCode: null,
-      prefecture: null,
-      city: null,
-      streetAddress: null,
-      nearestStation: null,
-      emergencyContactName: null,
-      emergencyContactRelationship: null,
-      emergencyContactPhone: null,
-      hasSpouse: null,
-      hasChildren: null,
-      hasDependents: null,
-      myNumber: null,
-      employmentInsuranceNumber: null,
-      basicPensionNumber: null,
-      salaryAccount: null,
-      isDelete: false,
-      createrId: null,
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      updaterId: null,
-      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-    };
-    const expectedDetails = mapEmployeeDetailsResponse(serviceResult);
+describe("getEmployeeDetailController", () => {
+  /** controllerはサービスの結果をそのまま返すだけなので、中身は一部の項目で足りる */
+  const detail = { employeeCode: "EMP001", name: "山田太郎" } as EmployeeDetail;
 
-    mockGetEmployeeDetailsService.mockResolvedValue(serviceResult as never);
-    const c = {
-      req: {
-        param: vi.fn().mockReturnValue({ id: 1 }),
-      },
-      json: vi.fn().mockReturnValue({ status: 200 }),
-    } as unknown as DetailsCtx;
+  const detailCtx = () =>
+    ({
+      req: { valid: validOf({ id: 1 }) },
+      json: vi.fn((data: unknown, status: number) => ({ data, status })),
+      get: vi.fn().mockReturnValue(loginUser),
+    }) as unknown as DetailCtx;
 
-    const result = await getEmployeeDetailsController(c, vi.fn());
+  it("検証済みのidとログインユーザーでサービスを呼び、詳細を200で返す", async () => {
+    mockGetEmployeeDetail.mockResolvedValue({ code: "SUCCESS", detail });
+    const c = detailCtx();
 
-    expect(c.req.param).toHaveBeenCalled();
-    expect(mockGetEmployeeDetailsService).toHaveBeenCalledWith(1);
-    expect(c.json).toHaveBeenCalledWith(expectedDetails, 200);
-    expect(result).toEqual({ status: 200 });
+    const result = await getEmployeeDetailController(c, vi.fn());
+
+    expect(c.req.valid).toHaveBeenCalledWith("param");
+    expect(c.get).toHaveBeenCalledWith("user");
+    expect(mockGetEmployeeDetail).toHaveBeenCalledWith(
+      employeeQueryRepository,
+      loginActor,
+      1,
+    );
+    expect(c.json).toHaveBeenCalledWith(detail, 200);
+    expect(result).toEqual({ data: detail, status: 200 });
   });
 
-  it("should return 404 when employee is not found", async () => {
-    mockGetEmployeeDetailsService.mockResolvedValue(null);
-    const c = {
-      req: {
-        param: vi.fn().mockReturnValue({ id: 1 }),
-      },
-      json: vi.fn().mockReturnValue({ status: 404 }),
-    } as unknown as DetailsCtx;
+  it("権限が無い場合は403を返す", async () => {
+    mockGetEmployeeDetail.mockResolvedValue({ code: "FORBIDDEN" });
+    const c = detailCtx();
 
-    const result = await getEmployeeDetailsController(c, vi.fn());
+    await getEmployeeDetailController(c, vi.fn());
+
+    expect(c.json).toHaveBeenCalledWith(
+      { error: "この操作を行う権限がありません" },
+      403,
+    );
+  });
+
+  it("社員が見つからない（他人の詳細を含む）場合は404を返す", async () => {
+    mockGetEmployeeDetail.mockResolvedValue({ code: "NOT_FOUND" });
+    const c = detailCtx();
+
+    await getEmployeeDetailController(c, vi.fn());
 
     expect(c.json).toHaveBeenCalledWith({ error: "社員が見つかりません" }, 404);
-    expect(result).toEqual({ status: 404 });
+  });
+
+  it("想定外のエラーは500を返す", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockGetEmployeeDetail.mockRejectedValue(new Error("DB接続エラー"));
+    const c = detailCtx();
+
+    await getEmployeeDetailController(c, vi.fn());
+
+    expect(c.json).toHaveBeenCalledWith(
+      { error: "サーバーエラーが発生しました" },
+      500,
+    );
+    consoleError.mockRestore();
   });
 });
