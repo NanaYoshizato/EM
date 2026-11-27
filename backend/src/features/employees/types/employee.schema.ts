@@ -81,12 +81,12 @@ export const createEmployeeSchema = z.object({
   /* 前職3社目の在籍終了日 */
   previousCompany3EndDate: z.iso.date().nullish(),
 
-  /* 週あたり稼働時間 */
+  /* 所定労働時間 */
   weeklyWorkHours: freeText()
     .max(20)
     .nullish(),
 
-  /* 月額想定給与 */
+  /* 月額見込給与 */
   monthlyEstimatedSalary: z
     .coerce.number()
     .int()
@@ -124,7 +124,7 @@ export const createEmployeeSchema = z.object({
     .max(20)
     .nullish(),
 
-  /* 緊急連絡先電話番号 */
+  /* 緊急電話番号 */
   emergencyContactPhone: z
     .string()
     .regex(/^0\d{1,4}-?\d{1,4}-?\d{4}$/)
@@ -145,7 +145,7 @@ export const createEmployeeSchema = z.object({
     .regex(/^\d{12}$/)
     .nullish(),
 
-  /* 雇用保険番号 */
+  /* 雇用保険被保険者番号 */
   employmentInsuranceNumber: z
     .string()
     .regex(/^\d{4}-\d{6}-\d{1}$/)
@@ -308,12 +308,12 @@ export const updateEmployeeSchema = z.object({
   /* 前職3社目の在籍終了日 */
   previousCompany3EndDate: z.iso.date().nullish(),
 
-  /* 週あたり稼働時間 */
+  /* 所定労働時間 */
   weeklyWorkHours: freeText()
     .max(20)
     .nullish(),
 
-  /* 月額想定給与 */
+  /* 月額見込給与 */
   monthlyEstimatedSalary: z
     .coerce.number()
     .int()
@@ -351,7 +351,7 @@ export const updateEmployeeSchema = z.object({
     .max(20)
     .nullish(),
 
-  /* 緊急連絡先電話番号 */
+  /* 緊急電話番号 */
   emergencyContactPhone: z
     .string()
     .regex(/^0\d{1,4}-?\d{1,4}-?\d{4}$/)
@@ -372,7 +372,7 @@ export const updateEmployeeSchema = z.object({
     .regex(/^\d{12}$/)
     .nullish(),
 
-  /* 雇用保険番号 */
+  /* 雇用保険被保険者番号 */
   employmentInsuranceNumber: z
     .string()
     .regex(/^\d{4}-\d{6}-\d{1}$/)
@@ -660,10 +660,10 @@ export const EmployeeDetailSchema = z.object({
   /* 前職3社目の在籍終了日 */
   previousCompany3EndDate: z.string().nullable(),
 
-  /* 週あたり稼働時間 */
+  /* 所定労働時間 */
   weeklyWorkHours: z.string().nullable(),
 
-  /* 月額想定給与 */
+  /* 月額見込給与 */
   monthlyEstimatedSalary: z.number().nullable(),
 
   /* 郵便番号 */
@@ -684,7 +684,7 @@ export const EmployeeDetailSchema = z.object({
   /* 緊急連絡先続柄 */
   emergencyContactRelationship: z.string().nullable(),
 
-  /* 緊急連絡先電話番号 */
+  /* 緊急電話番号 */
   emergencyContactPhone: z.string().nullable(),
 
   /* 配偶者の有無 */
@@ -699,7 +699,7 @@ export const EmployeeDetailSchema = z.object({
   /* マイナンバー */
   myNumber: z.string().nullable(),
 
-  /* 雇用保険番号 */
+  /* 雇用保険被保険者番号 */
   employmentInsuranceNumber: z.string().nullable(),
 
   /* 基礎年金番号 */
