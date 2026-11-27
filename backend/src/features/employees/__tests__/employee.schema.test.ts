@@ -215,3 +215,32 @@ describe("家族の有無・稼働ステータスの値", () => {
     expect(updateEmployeeSchema.safeParse({ workStatus }).success).toBe(false);
   });
 });
+
+describe("フリガナ（全角カタカナに統一）・氏名の長さ", () => {
+  const furiganaOf = (furigana: string) => {
+    const result = updateEmployeeSchema.safeParse({ furigana });
+    return result.success ? result.data.furigana : "NG";
+  };
+
+  it.each([
+    ["ひらがなはカタカナにする", "やまだ たろう", "ヤマダ タロウ"],
+    ["ひらがなとカタカナが混ざっていても揃える", "やまダ", "ヤマダ"],
+    ["カタカナはそのまま", "ヤマダタロウ", "ヤマダタロウ"],
+    ["長音・中黒・全角空白を通す", "ジョン・スミス　ルーシー", "ジョン・スミス　ルーシー"],
+  ])("%s", (_, input, expected) => {
+    expect(furiganaOf(input)).toBe(expected);
+  });
+
+  it.each(["山田", "Yamada", "ﾔﾏﾀﾞ", "ヤマダ1"])("カタカナ以外が残る「%s」は弾く", (furigana) => {
+    expect(furiganaOf(furigana)).toBe("NG");
+  });
+
+  it.each([
+    ["name", "山".repeat(30), true],
+    ["name", "山".repeat(31), false],
+    ["furigana", "ア".repeat(30), true],
+    ["furigana", "ア".repeat(31), false],
+  ])("%sは30文字まで（%s → %s）", (field, value, ok) => {
+    expect(updateEmployeeSchema.safeParse({ [field]: value }).success).toBe(ok);
+  });
+});

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { freeText, gitHubUsername, personName } from "@/lib/textSchema";
+import { freeText, furiganaName, gitHubUsername, personName } from "@/lib/textSchema";
 import { Gender, Specialty, WorkStatus } from "@prisma/client";
 import { ROLE_NAMES } from "@/constants/roles";
 
@@ -10,12 +10,12 @@ export const createEmployeeSchema = z.object({
   /* 氏名 */
   name: personName()
     .min(1)
-    .max(50),
+    .max(30),
 
-  /* フリガナ */
-  furigana: personName()
+  /* フリガナ（ひらがなはカタカナにして保存） */
+  furigana: furiganaName()
     .min(1)
-    .max(50),
+    .max(30),
 
   /* 生年月日 */
   birthDate: z.iso.date(),
@@ -235,13 +235,13 @@ export const updateEmployeeSchema = z.object({
   /* 氏名 */
   name: personName()
     .min(1)
-    .max(50)
+    .max(30)
     .optional(),
 
-  /* フリガナ */
-  furigana: personName()
+  /* フリガナ（ひらがなはカタカナにして保存） */
+  furigana: furiganaName()
     .min(1)
-    .max(50)
+    .max(30)
     .optional(),
 
   /* 生年月日 */

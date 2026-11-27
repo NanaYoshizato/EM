@@ -98,8 +98,8 @@ model Employee {
   userId       Int?   @unique @map("user_id")
   user         User?  @relation(fields: [userId], references: [id])
 
-  name      String    @map("name") @db.VarChar(50)
-  furigana  String?   @map("furigana") @db.VarChar(50)
+  name      String    @map("name") @db.VarChar(30)
+  furigana  String?   @map("furigana") @db.VarChar(30)
   email     String?   @unique @map("email")
   birthDate DateTime? @map("birth_date")
   gender    Gender?   @map("gender")

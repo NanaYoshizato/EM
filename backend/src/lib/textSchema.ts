@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { toKatakana } from "./kana";
 
 /**
  * 自由入力の文字列で受け付けない文字
@@ -13,6 +14,9 @@ const STACKED_MARKS = /\p{M}{3,}/u;
 
 /** 人名で受け付けない文字（ファイル名に使われた場合のパストラバーサル対策） */
 const PATH_SEPARATORS = /[/\\]/;
+
+/** フリガナで受け付ける文字（全角カタカナ・長音・中黒・空白） */
+const KATAKANA_NAME = /^[\u30A1-\u30F6\u30FC\u30FB\u3000 ]+$/u;
 
 /** GitHubのユーザー名（英数字とハイフン、39文字以内。先頭・末尾・連続のハイフン不可。空文字は許可） */
 const GITHUB_USERNAME = /^(?:[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38})?$/;
@@ -34,3 +38,9 @@ export const personName = () =>
 /** GitHubのユーザー名 */
 export const gitHubUsername = () =>
   z.string().trim().regex(GITHUB_USERNAME, "GitHubのユーザー名の形式が正しくありません");
+
+/** フリガナ（ひらがなはカタカナにしてから、全角カタカナだけかを確かめる） */
+export const furiganaName = () =>
+  personName()
+    .overwrite(toKatakana)
+    .regex(KATAKANA_NAME, "フリガナは全角カタカナで入力してください");
