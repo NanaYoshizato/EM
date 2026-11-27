@@ -6,7 +6,6 @@ import {
   Employee,
   EMPLOYEE_CODE_PREFIX,
   InvalidSkillIdError,
-  toFamilyAnswer,
   type ProjectHistory,
 } from "./domain/employee";
 import type {
@@ -520,9 +519,9 @@ const toConfidentialDetail = (row: RowOf<typeof CONFIDENTIAL_SELECT>) => ({
   basicPensionNumber: row.basicPensionNumber,
   weeklyWorkHours: row.weeklyWorkHours,
   monthlyEstimatedSalary: row.monthlyEstimatedSalary,
-  hasSpouse: toFamilyAnswer(row.hasSpouse),
-  hasChildren: toFamilyAnswer(row.hasChildren),
-  hasDependents: toFamilyAnswer(row.hasDependents),
+  hasSpouse: row.hasSpouse,
+  hasChildren: row.hasChildren,
+  hasDependents: row.hasDependents,
 });
 
 /**

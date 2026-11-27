@@ -1,0 +1,4 @@
+-- 稼働ステータスの値を、用語集の就業ステータスに合わせる（既存の値は名前を変えて引き継ぐ）
+ALTER TYPE "WorkStatus" RENAME VALUE 'ASSIGNED' TO 'WORKING';
+ALTER TYPE "WorkStatus" RENAME VALUE 'CONTRACT_ENDED' TO 'LEAVE';
+ALTER TYPE "WorkStatus" ADD VALUE 'BEFORE_JOIN' BEFORE 'LEAVE';

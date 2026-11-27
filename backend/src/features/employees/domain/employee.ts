@@ -10,7 +10,6 @@ import type {
 	EmployeeProfile,
 	EmployeeSkill,
 	EmployeeState,
-	FamilyField,
 	NewEmployeeInput,
 	PreviousCompanyDates,
 	ProjectHistoryInput,
@@ -180,30 +179,6 @@ export class ProjectHistory {
 // エラーメッセージに使う前職の呼び名
 const PREVIOUS_COMPANY_LABELS = ["前職1社目", "前職2社目", "前職3社目"] as const;
 
-// 有無をtrue/falseに変換するルール（null・undefinedはそのまま）
-const toBoolean = (value: "有" | "無" | null | undefined): boolean | null | undefined =>
-	value == null ? value : value === "有";
-
-// true/falseを有無に戻すルール（toBooleanの逆。読み取りで入力と同じ形にして返す）
-export const toFamilyAnswer = (value: boolean | null): "有" | "無" | null =>
-	value === null ? null : value ? "有" : "無";
-
-/**
- * 外から受け取った基本情報を集約の形に変換する（POST/PATCH共通）
- * 家族の有無の3項目だけ取り出してbooleanに変換し、残り（rest）はそのまま使う
- */
-const toProfile = <T extends { [K in FamilyField]?: "有" | "無" | null | undefined }>({
-	hasSpouse,
-	hasChildren,
-	hasDependents,
-	...rest
-}: T) => ({
-	...rest,
-	hasSpouse: toBoolean(hasSpouse),
-	hasChildren: toBoolean(hasChildren),
-	hasDependents: toBoolean(hasDependents),
-});
-
 /**
  * 社員（Employee）集約
  * 値を変えられるのはcreate/updateだけで、どちらも業務ルールをチェックしてから値を変える
@@ -263,7 +238,7 @@ export class Employee {
 		const { skills, projects, ...rest } = input;
 
 		// 業務ルールをチェックする（違反していればエラーになり、社員は作られない）
-		const profile: EmployeeProfile = nullToUndefined(toProfile(rest));
+		const profile: EmployeeProfile = nullToUndefined(rest);
 		Employee.assertValidPreviousCompanyDates(profile);
 		assertNoDuplicateSkillIds(skills.map((skill) => skill.skillId));
 
@@ -306,7 +281,7 @@ export class Employee {
 		// 1. 変更後の基本情報を組み立てる（保存済みの値に、送られてきた項目だけを上書きする。nullは値を消す）
 		const profile: EmployeeProfile = nullToUndefined({
 			...this._profile,
-			...withoutUndefined(toProfile(rest)),
+			...withoutUndefined(rest),
 		});
 		// 2. チェックする（ここでエラーになれば、値は何も変わらない）
 		Employee.assertValidPreviousCompanyDates(profile);

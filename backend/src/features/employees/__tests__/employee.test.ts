@@ -186,9 +186,9 @@ describe("Employee.create", () => {
     expect(employee.skills).toEqual([{ skillId: 1, years: 2 }]);
   });
 
-  it("hasSpouse等を有/無からbooleanに変換する", () => {
+  it("hasSpouse等の家族の有無をbooleanのまま保持する", () => {
     const employee = Employee.create(
-      { ...baseData, hasSpouse: "有", hasChildren: "無" },
+      { ...baseData, hasSpouse: true, hasChildren: false },
       null,
     );
     expect(employee.profile.hasSpouse).toBe(true);
@@ -315,9 +315,9 @@ describe("Employee.update", () => {
     expect(employee.projectHistoriesReplaced).toBe(false);
   });
 
-  it("hasSpouse等を有/無からbooleanに変換する", () => {
+  it("hasSpouse等の家族の有無をbooleanのまま保持する", () => {
     const employee = restore();
-    employee.update({ hasSpouse: "有" });
+    employee.update({ hasSpouse: true });
     expect(employee.profile.hasSpouse).toBe(true);
   });
 

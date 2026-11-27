@@ -131,13 +131,13 @@ export const createEmployeeSchema = z.object({
     .nullish(),
 
   /* 配偶者の有無 */
-  hasSpouse: z.enum(["有", "無"]).nullish(),
+  hasSpouse: z.boolean().nullish(),
 
   /* 子の有無 */
-  hasChildren: z.enum(["有", "無"]).nullish(),
+  hasChildren: z.boolean().nullish(),
 
   /* 扶養家族の有無 */
-  hasDependents: z.enum(["有", "無"]).nullish(),
+  hasDependents: z.boolean().nullish(),
 
   /* マイナンバー */
   myNumber: z
@@ -358,13 +358,13 @@ export const updateEmployeeSchema = z.object({
     .nullish(),
 
   /* 配偶者の有無 */
-  hasSpouse: z.enum(["有", "無"]).nullish(),
+  hasSpouse: z.boolean().nullish(),
 
   /* 子の有無 */
-  hasChildren: z.enum(["有", "無"]).nullish(),
+  hasChildren: z.boolean().nullish(),
 
   /* 扶養家族の有無 */
-  hasDependents: z.enum(["有", "無"]).nullish(),
+  hasDependents: z.boolean().nullish(),
 
   /* マイナンバー */
   myNumber: z
@@ -688,13 +688,13 @@ export const EmployeeDetailSchema = z.object({
   emergencyContactPhone: z.string().nullable(),
 
   /* 配偶者の有無 */
-  hasSpouse: z.enum(["有", "無"]).nullable(),
+  hasSpouse: z.boolean().nullable(),
 
   /* 子の有無 */
-  hasChildren: z.enum(["有", "無"]).nullable(),
+  hasChildren: z.boolean().nullable(),
 
   /* 扶養家族の有無 */
-  hasDependents: z.enum(["有", "無"]).nullable(),
+  hasDependents: z.boolean().nullable(),
 
   /* マイナンバー */
   myNumber: z.string().nullable(),

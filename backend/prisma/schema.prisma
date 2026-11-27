@@ -28,12 +28,14 @@ enum Specialty {
   UNDECIDED
 }
 
+// 稼働ステータス（社員ごとに入力する。値は用語集の就業ステータスに内勤を加えたもの）
 enum WorkStatus {
-  ASSIGNED
-  WAITING
-  TRAINING
-  IN_OFFICE
-  CONTRACT_ENDED
+  WORKING // 稼働中
+  WAITING // 待機中
+  TRAINING // 研修中
+  IN_OFFICE // 内勤
+  BEFORE_JOIN // 入社前
+  LEAVE // 契約終了
 }
 
 enum SkillCategory {

@@ -180,7 +180,7 @@ describe("findDetail", () => {
     phone: null,
     joinDate: new Date("2026-04-01"),
     specialty: "BE",
-    workStatus: "ASSIGNED",
+    workStatus: "WORKING",
     gitHub: null,
     trainingEndDate: null,
     previousCompany1Name: "前職A",
@@ -257,8 +257,8 @@ describe("findDetail", () => {
       previousCompany1StartDate: "2020-04-01",
       previousCompany1EndDate: null,
       myNumber: "123456789012",
-      hasSpouse: "有",
-      hasChildren: "無",
+      hasSpouse: true,
+      hasChildren: false,
       hasDependents: null,
       skills: [{ skillId: 1, name: "TypeScript", years: 2.5 }],
       projects: [
@@ -357,7 +357,7 @@ describe("insert", () => {
   it("集約の社員コード・基本情報・子テーブルを保存し、採番されたidを返す", async () => {
     const tx = runTransaction();
     const employee = Employee.create(
-      { ...baseInput, hasSpouse: "有", joinDate: "2026-04" },
+      { ...baseInput, hasSpouse: true, joinDate: "2026-04" },
       "EMP005",
     );
 

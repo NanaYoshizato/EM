@@ -194,3 +194,24 @@ describe("EmployeeListQuerySchema — 一覧の検索条件", () => {
   });
 });
 
+
+describe("家族の有無・稼働ステータスの値", () => {
+  it.each([true, false])("家族の有無はboolean（%s）を通す", (hasSpouse) => {
+    expect(updateEmployeeSchema.safeParse({ hasSpouse }).success).toBe(true);
+  });
+
+  it.each(["有", "無", "true"])("家族の有無の文字列「%s」は弾く", (hasSpouse) => {
+    expect(updateEmployeeSchema.safeParse({ hasSpouse }).success).toBe(false);
+  });
+
+  it.each(["WORKING", "WAITING", "TRAINING", "IN_OFFICE", "BEFORE_JOIN", "LEAVE"])(
+    "稼働ステータス%sを通す",
+    (workStatus) => {
+      expect(updateEmployeeSchema.safeParse({ workStatus }).success).toBe(true);
+    },
+  );
+
+  it.each(["ASSIGNED", "CONTRACT_ENDED", "working"])("稼働ステータス%sは弾く", (workStatus) => {
+    expect(updateEmployeeSchema.safeParse({ workStatus }).success).toBe(false);
+  });
+});

@@ -432,7 +432,7 @@ describe("updateEmployee — 権限", () => {
   it.each<[string, string, Actor, UpdateEmployeeInput]>([
     ["管理者・機密", "SUCCESS", admin, { myNumber: "123456789012" }],
     ["システム管理者・公開の項目", "SUCCESS", systemAdmin, { name: "山田花子" }],
-    ["システム管理者・基本情報", "SUCCESS", systemAdmin, { workStatus: "ASSIGNED" }],
+    ["システム管理者・基本情報", "SUCCESS", systemAdmin, { workStatus: "WORKING" }],
     ["システム管理者・連絡先", "SUCCESS", systemAdmin, { postalCode: "1000001" }],
     ["システム管理者・案件履歴", "SUCCESS", systemAdmin, { projects: [] }],
     ["システム管理者・機密", "FORBIDDEN", systemAdmin, { myNumber: "123456789012" }],
@@ -441,7 +441,7 @@ describe("updateEmployee — 権限", () => {
     ["営業・案件履歴（要確認）", "FORBIDDEN", sales, { projects: [] }],
     ["メンター・公開の項目", "FORBIDDEN", mentor, { name: "山田花子" }],
     ["一般社員・公開の項目（要確認）", "FORBIDDEN", employee, { name: "山田花子" }],
-    ["一般社員・基本情報（要確認）", "FORBIDDEN", employee, { workStatus: "ASSIGNED" }],
+    ["一般社員・基本情報（要確認）", "FORBIDDEN", employee, { workStatus: "WORKING" }],
     ["一般社員・連絡先（要確認）", "FORBIDDEN", employee, { postalCode: "1000001" }],
   ])("%s を更新すると %s", async (_, expected, actor, data) => {
     const result = await updateEmployee(repository, queryRepository, actor, 1, data);

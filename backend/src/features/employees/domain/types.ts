@@ -8,11 +8,12 @@ import type { RoleName } from "@/constants/roles";
 export type Gender = "MALE" | "FEMALE" | "OTHER";
 export type Specialty = "FE" | "BE" | "UNDECIDED";
 export type WorkStatus =
-	| "ASSIGNED"
+	| "WORKING"
 	| "WAITING"
 	| "TRAINING"
 	| "IN_OFFICE"
-	| "CONTRACT_ENDED";
+	| "BEFORE_JOIN"
+	| "LEAVE";
 
 /** 社員の基本情報（日付は"YYYY-MM-DD"の文字列。値が無い項目はundefined） */
 export type EmployeeProfile = {
@@ -85,17 +86,12 @@ export type PreviousCompanyDates = Pick<
 	| "previousCompany3EndDate"
 >;
 
-/** 家族の有無の項目*/
-export type FamilyField = "hasSpouse" | "hasChildren" | "hasDependents";
-
 /** 必ず値がある項目（nullで消せない） */
 type RequiredProfileField = "name" | "specialty" | "workStatus";
 
 /** 外から受け取る基本情報（任意の項目はnullで「値なし」） */
 export type ProfileInput = Pick<EmployeeProfile, RequiredProfileField> & {
-	[K in Exclude<keyof EmployeeProfile, RequiredProfileField | FamilyField>]?: EmployeeProfile[K] | null;
-} & {
-	[K in FamilyField]?: "有" | "無" | null | undefined;
+	[K in Exclude<keyof EmployeeProfile, RequiredProfileField>]?: EmployeeProfile[K] | null;
 };
 
 /** 新規登録の入力 */
